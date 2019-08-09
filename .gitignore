@@ -1,0 +1,18 @@
+out
+third_party/cpplint
+third_party/glslang
+third_party/googletest
+third_party/lodepng
+third_party/shaderc
+third_party/spirv-tools
+third_party/spirv-headers
+third_party/vulkan-headers
+third_party/vulkan-loader
+.vs
+
+# Vim swap files
+[._]*.s[a-w][a-z]
+
+# C-Lion
+.idea
+cmake-build-debug
