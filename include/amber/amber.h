@@ -38,11 +38,19 @@ enum EngineType {
   kEngineTypeDawn,
 };
 
+enum class ExecutionType {
+  /// Execute as normal.
+  kExecute = 0,
+  /// Only create the pipelines and then exit.
+  kPipelineCreateOnly
+};
+
 /// Override point of engines to add their own configuration.
 struct EngineConfig {
   virtual ~EngineConfig();
 };
 
+/// Stores information for a biffer.
 struct BufferInfo {
   BufferInfo();
   BufferInfo(const BufferInfo&);
@@ -50,6 +58,8 @@ struct BufferInfo {
 
   BufferInfo& operator=(const BufferInfo&);
 
+  /// Determines if this is an image buffer.
+  bool is_image_buffer;
   /// Holds the buffer name
   std::string buffer_name;
   /// Holds the buffer width
@@ -73,8 +83,11 @@ class Delegate {
   virtual bool LogGraphicsCallsTime() const = 0;
   /// Returns the current timestamp in nanoseconds
   virtual uint64_t GetTimestampNs() const = 0;
+  /// Tells whether to log each test as it's executed
+  virtual bool LogExecuteCalls() const = 0;
 };
 
+/// Stores configuration options for Amber.
 struct Options {
   Options();
   ~Options();
@@ -84,11 +97,23 @@ struct Options {
   /// Holds engine specific configuration. Ownership stays with the caller.
   EngineConfig* config;
   /// The SPIR-V environment to target.
+  /// E.g. "spv1.0", "spv1.3", "vulkan1.0", "vulkan1.1spv1.4".
+  /// If a Vulkan environment, uses the highest version of SPIR-V required
+  /// to be supported by that Vulkan environment.  For SPIR-V 1.4 in
+  /// Vulkan, use "vulkan1.1spv1.4".
+  /// If a SPIR-V environment is specified, assume the lowest version
+  /// of Vulkan that requires support for that version of SPIR-V.
+  /// Shader compilers may limit the list of supported environments.
+  /// If empty, a default of "spv1.0" is used.
   std::string spv_env;
   /// Lists the buffers to extract at the end of the execution
   std::vector<BufferInfo> extractions;
-  /// Terminate after creating the pipelines.
-  bool pipeline_create_only;
+  /// The type of execution. For example, execute as normal or just create the
+  /// piplines and exit.
+  ExecutionType execution_type;
+  /// If true, disables SPIR-V validation. If false, SPIR-V shaders will be
+  /// validated using the Validator component (spirv-val) from SPIRV-Tools.
+  bool disable_spirv_validation;
   /// Delegate implementation
   Delegate* delegate;
 };

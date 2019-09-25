@@ -46,12 +46,6 @@ TEST_F(DawnRenderPipelineInfoTest, DefaultValuesForMembers) {
   EXPECT_FLOAT_EQ(0.0f, rpi.clear_color_value.a);
   EXPECT_FLOAT_EQ(1.0f, rpi.clear_depth_value);
   EXPECT_EQ(0u, rpi.clear_stencil_value);
-  EXPECT_FALSE(static_cast<bool>(rpi.fb_texture));
-  EXPECT_FALSE(static_cast<bool>(rpi.fb_buffer));
-  EXPECT_EQ(0u, rpi.fb_texel_stride);
-  EXPECT_EQ(0u, rpi.fb_row_stride);
-  EXPECT_EQ(0u, rpi.fb_num_rows);
-  EXPECT_EQ(0u, rpi.fb_size);
 }
 
 }  // namespace

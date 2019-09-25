@@ -106,7 +106,7 @@ TEST_P(AmberScriptPipelineComputePipelineTest,
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("only compute shaders allowed in a compute pipeline", r.Error());
 }
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     AmberScriptPipelineComputePipelineTests,
     AmberScriptPipelineComputePipelineTest,
     testing::Values(
@@ -115,7 +115,7 @@ INSTANTIATE_TEST_CASE_P(
         ShaderTypeData{kShaderTypeGeometry},
         ShaderTypeData{kShaderTypeTessellationEvaluation},
         ShaderTypeData{
-            kShaderTypeTessellationControl}), );  // NOLINT(whitespace/parens)
+            kShaderTypeTessellationControl}));  // NOLINT(whitespace/parens)
 
 TEST_F(PipelineTest, SettingComputeShaderToGraphicsPipeline) {
   Shader c(kShaderTypeCompute);
@@ -213,25 +213,6 @@ TEST_F(PipelineTest, GraphicsPipelineRequiresVertexAndFragmentShader) {
   EXPECT_TRUE(r.IsSuccess()) << r.Error();
 }
 
-TEST_F(PipelineTest, GraphicsPipelineMissingFragmentShader) {
-  Shader v(kShaderTypeVertex);
-  Shader g(kShaderTypeGeometry);
-
-  Pipeline p(PipelineType::kGraphics);
-  SetupColorAttachment(&p, 0);
-  SetupDepthAttachment(&p);
-
-  Result r = p.AddShader(&v, kShaderTypeVertex);
-  EXPECT_TRUE(r.IsSuccess()) << r.Error();
-
-  r = p.AddShader(&g, kShaderTypeGeometry);
-  EXPECT_TRUE(r.IsSuccess()) << r.Error();
-
-  r = p.Validate();
-  EXPECT_FALSE(r.IsSuccess()) << r.Error();
-  EXPECT_EQ("graphics pipeline requires a fragment shader", r.Error());
-}
-
 TEST_F(PipelineTest, GraphicsPipelineMissingVertexShader) {
   Shader f(kShaderTypeFragment);
   Shader g(kShaderTypeGeometry);
@@ -249,33 +230,6 @@ TEST_F(PipelineTest, GraphicsPipelineMissingVertexShader) {
   r = p.Validate();
   EXPECT_FALSE(r.IsSuccess()) << r.Error();
   EXPECT_EQ("graphics pipeline requires a vertex shader", r.Error());
-}
-
-TEST_F(PipelineTest, GraphicsPipelineMissingVertexAndFragmentShader) {
-  Shader g(kShaderTypeGeometry);
-
-  Pipeline p(PipelineType::kGraphics);
-  SetupColorAttachment(&p, 0);
-  SetupDepthAttachment(&p);
-
-  Result r = p.AddShader(&g, kShaderTypeGeometry);
-  EXPECT_TRUE(r.IsSuccess()) << r.Error();
-
-  r = p.Validate();
-  EXPECT_FALSE(r.IsSuccess()) << r.Error();
-  EXPECT_EQ("graphics pipeline requires vertex and fragment shaders",
-            r.Error());
-}
-
-TEST_F(PipelineTest, GraphicsPipelineWihoutShaders) {
-  Pipeline p(PipelineType::kGraphics);
-  SetupColorAttachment(&p, 0);
-  SetupDepthAttachment(&p);
-
-  Result r = p.Validate();
-  EXPECT_FALSE(r.IsSuccess()) << r.Error();
-  EXPECT_EQ("graphics pipeline requires vertex and fragment shaders",
-            r.Error());
 }
 
 TEST_F(PipelineTest, ComputePipelineRequiresComputeShader) {
@@ -300,6 +254,18 @@ TEST_F(PipelineTest, ComputePipelineWithoutShader) {
   Result r = p.Validate();
   EXPECT_FALSE(r.IsSuccess()) << r.Error();
   EXPECT_EQ("compute pipeline requires a compute shader", r.Error());
+}
+
+TEST_F(PipelineTest, PipelineBufferWithoutFormat) {
+  Pipeline p(PipelineType::kCompute);
+
+  auto buf = MakeUnique<Buffer>(BufferType::kStorage);
+  buf->SetName("MyBuffer");
+  p.AddBuffer(buf.get(), 0, 0);
+
+  Result r = p.Validate();
+  EXPECT_FALSE(r.IsSuccess()) << r.Error();
+  EXPECT_EQ("buffer (0:0) requires a format", r.Error());
 }
 
 TEST_F(PipelineTest, SetEntryPointForMissingShader) {
@@ -384,19 +350,19 @@ TEST_F(PipelineTest, Clone) {
   p.AddShader(&v, kShaderTypeVertex);
   p.SetShaderEntryPoint(&v, "my_main");
 
-  auto vtex_buf = MakeUnique<DataBuffer>(BufferType::kVertex);
+  auto vtex_buf = MakeUnique<Buffer>(BufferType::kVertex);
   vtex_buf->SetName("vertex_buffer");
   p.AddVertexBuffer(vtex_buf.get(), 1);
 
-  auto idx_buf = MakeUnique<DataBuffer>(BufferType::kIndex);
+  auto idx_buf = MakeUnique<Buffer>(BufferType::kIndex);
   idx_buf->SetName("Index Buffer");
   p.SetIndexBuffer(idx_buf.get());
 
-  auto buf1 = MakeUnique<DataBuffer>(BufferType::kStorage);
+  auto buf1 = MakeUnique<Buffer>(BufferType::kStorage);
   buf1->SetName("buf1");
   p.AddBuffer(buf1.get(), 1, 1);
 
-  auto buf2 = MakeUnique<DataBuffer>(BufferType::kStorage);
+  auto buf2 = MakeUnique<Buffer>(BufferType::kStorage);
   buf2->SetName("buf2");
   p.AddBuffer(buf2.get(), 1, 2);
 
@@ -428,6 +394,340 @@ TEST_F(PipelineTest, Clone) {
   EXPECT_EQ("buf2", bufs[1].buffer->GetName());
   EXPECT_EQ(1U, bufs[1].descriptor_set);
   EXPECT_EQ(2U, bufs[1].binding);
+}
+
+TEST_F(PipelineTest, OpenCLUpdateBindings) {
+  Pipeline p(PipelineType::kCompute);
+  p.SetName("my_pipeline");
+
+  Shader cs(kShaderTypeCompute);
+  cs.SetFormat(kShaderFormatOpenCLC);
+  p.AddShader(&cs, kShaderTypeCompute);
+  p.SetShaderEntryPoint(&cs, "my_main");
+
+  Pipeline::ShaderInfo::DescriptorMapEntry entry1;
+  entry1.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::SSBO;
+  entry1.descriptor_set = 4;
+  entry1.binding = 5;
+  entry1.arg_name = "arg_a";
+  entry1.arg_ordinal = 0;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry1));
+
+  Pipeline::ShaderInfo::DescriptorMapEntry entry2;
+  entry2.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::SSBO;
+  entry2.descriptor_set = 3;
+  entry2.binding = 1;
+  entry2.arg_name = "arg_b";
+  entry2.arg_ordinal = 1;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry2));
+
+  auto a_buf = MakeUnique<Buffer>(BufferType::kStorage);
+  a_buf->SetName("buf1");
+  p.AddBuffer(a_buf.get(), "arg_a");
+
+  auto b_buf = MakeUnique<Buffer>(BufferType::kStorage);
+  b_buf->SetName("buf2");
+  p.AddBuffer(b_buf.get(), 1);
+
+  p.UpdateOpenCLBufferBindings();
+
+  auto& bufs = p.GetBuffers();
+  ASSERT_EQ(2U, bufs.size());
+  EXPECT_EQ("buf1", bufs[0].buffer->GetName());
+  EXPECT_EQ(4U, bufs[0].descriptor_set);
+  EXPECT_EQ(5U, bufs[0].binding);
+  EXPECT_EQ("buf2", bufs[1].buffer->GetName());
+  EXPECT_EQ(3U, bufs[1].descriptor_set);
+  EXPECT_EQ(1U, bufs[1].binding);
+}
+
+TEST_F(PipelineTest, OpenCLUpdateBindingTypeMismatch) {
+  Pipeline p(PipelineType::kCompute);
+  p.SetName("my_pipeline");
+
+  Shader cs(kShaderTypeCompute);
+  cs.SetFormat(kShaderFormatOpenCLC);
+  p.AddShader(&cs, kShaderTypeCompute);
+  p.SetShaderEntryPoint(&cs, "my_main");
+
+  Pipeline::ShaderInfo::DescriptorMapEntry entry1;
+  entry1.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::SSBO;
+  entry1.descriptor_set = 4;
+  entry1.binding = 5;
+  entry1.arg_name = "arg_a";
+  entry1.arg_ordinal = 0;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry1));
+
+  Pipeline::ShaderInfo::DescriptorMapEntry entry2;
+  entry2.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::SSBO;
+  entry2.descriptor_set = 3;
+  entry2.binding = 1;
+  entry2.arg_name = "arg_b";
+  entry2.arg_ordinal = 1;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry2));
+
+  auto a_buf = MakeUnique<Buffer>(BufferType::kStorage);
+  a_buf->SetName("buf1");
+  p.AddBuffer(a_buf.get(), "arg_a");
+
+  auto b_buf = MakeUnique<Buffer>(BufferType::kUniform);
+  b_buf->SetName("buf2");
+  p.AddBuffer(b_buf.get(), 1);
+
+  auto r = p.UpdateOpenCLBufferBindings();
+
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("Buffer buf2 must be an uniform binding", r.Error());
+}
+
+TEST_F(PipelineTest, OpenCLGeneratePodBuffers) {
+  Pipeline p(PipelineType::kCompute);
+  p.SetName("my_pipeline");
+
+  Shader cs(kShaderTypeCompute);
+  cs.SetFormat(kShaderFormatOpenCLC);
+  p.AddShader(&cs, kShaderTypeCompute);
+  p.SetShaderEntryPoint(&cs, "my_main");
+
+  // Descriptor map.
+  Pipeline::ShaderInfo::DescriptorMapEntry entry1;
+  entry1.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::POD;
+  entry1.descriptor_set = 4;
+  entry1.binding = 5;
+  entry1.arg_name = "arg_a";
+  entry1.arg_ordinal = 0;
+  entry1.pod_offset = 0;
+  entry1.pod_arg_size = 4;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry1));
+
+  Pipeline::ShaderInfo::DescriptorMapEntry entry2;
+  entry2.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::POD;
+  entry2.descriptor_set = 4;
+  entry2.binding = 5;
+  entry2.arg_name = "arg_b";
+  entry2.arg_ordinal = 0;
+  entry2.pod_offset = 4;
+  entry2.pod_arg_size = 1;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry2));
+
+  Pipeline::ShaderInfo::DescriptorMapEntry entry3;
+  entry3.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::POD;
+  entry3.descriptor_set = 4;
+  entry3.binding = 4;
+  entry3.arg_name = "arg_c";
+  entry3.arg_ordinal = 0;
+  entry3.pod_offset = 0;
+  entry3.pod_arg_size = 4;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry3));
+
+  // Set commands.
+  Value int_value;
+  int_value.SetIntValue(1);
+  DatumType int_type;
+  int_type.SetType(DataType::kInt32);
+  DatumType char_type;
+  char_type.SetType(DataType::kInt8);
+
+  Pipeline::ArgSetInfo arg_info1;
+  arg_info1.name = "arg_a";
+  arg_info1.ordinal = 99;
+  arg_info1.type = int_type;
+  arg_info1.value = int_value;
+  p.SetArg(std::move(arg_info1));
+
+  Pipeline::ArgSetInfo arg_info2;
+  arg_info2.name = "arg_b";
+  arg_info2.ordinal = 99;
+  arg_info2.type = char_type;
+  arg_info2.value = int_value;
+  p.SetArg(std::move(arg_info2));
+
+  Pipeline::ArgSetInfo arg_info3;
+  arg_info3.name = "arg_c";
+  arg_info3.ordinal = 99;
+  arg_info3.type = int_type;
+  arg_info3.value = int_value;
+  p.SetArg(std::move(arg_info3));
+
+  auto r = p.GenerateOpenCLPodBuffers();
+  ASSERT_TRUE(r.IsSuccess());
+  EXPECT_EQ(2U, p.GetBuffers().size());
+
+  const auto& b1 = p.GetBuffers()[0];
+  EXPECT_EQ(4U, b1.descriptor_set);
+  EXPECT_EQ(5U, b1.binding);
+  EXPECT_EQ(5U, b1.buffer->ValueCount());
+
+  const auto& b2 = p.GetBuffers()[1];
+  EXPECT_EQ(4U, b2.descriptor_set);
+  EXPECT_EQ(4U, b2.binding);
+  EXPECT_EQ(4U, b2.buffer->ValueCount());
+}
+
+TEST_F(PipelineTest, OpenCLGeneratePodBuffersBadName) {
+  Pipeline p(PipelineType::kCompute);
+  p.SetName("my_pipeline");
+
+  Shader cs(kShaderTypeCompute);
+  cs.SetFormat(kShaderFormatOpenCLC);
+  p.AddShader(&cs, kShaderTypeCompute);
+  p.SetShaderEntryPoint(&cs, "my_main");
+
+  // Descriptor map.
+  Pipeline::ShaderInfo::DescriptorMapEntry entry1;
+  entry1.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::POD;
+  entry1.descriptor_set = 4;
+  entry1.binding = 5;
+  entry1.arg_name = "arg_a";
+  entry1.arg_ordinal = 0;
+  entry1.pod_offset = 0;
+  entry1.pod_arg_size = 4;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry1));
+
+  // Set commands.
+  Value int_value;
+  int_value.SetIntValue(1);
+  DatumType int_type;
+  int_type.SetType(DataType::kInt32);
+
+  Pipeline::ArgSetInfo arg_info1;
+  arg_info1.name = "arg_z";
+  arg_info1.ordinal = 99;
+  arg_info1.type = int_type;
+  arg_info1.value = int_value;
+  p.SetArg(std::move(arg_info1));
+
+  auto r = p.GenerateOpenCLPodBuffers();
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ(
+      "could not find descriptor map entry for SET command: kernel my_main, "
+      "name arg_z",
+      r.Error());
+}
+
+TEST_F(PipelineTest, OpenCLGeneratePodBuffersBadSize) {
+  Pipeline p(PipelineType::kCompute);
+  p.SetName("my_pipeline");
+
+  Shader cs(kShaderTypeCompute);
+  cs.SetFormat(kShaderFormatOpenCLC);
+  p.AddShader(&cs, kShaderTypeCompute);
+  p.SetShaderEntryPoint(&cs, "my_main");
+
+  // Descriptor map.
+  Pipeline::ShaderInfo::DescriptorMapEntry entry1;
+  entry1.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::POD;
+  entry1.descriptor_set = 4;
+  entry1.binding = 5;
+  entry1.arg_name = "arg_a";
+  entry1.arg_ordinal = 0;
+  entry1.pod_offset = 0;
+  entry1.pod_arg_size = 4;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry1));
+
+  // Set commands.
+  Value int_value;
+  int_value.SetIntValue(1);
+  DatumType short_type;
+  short_type.SetType(DataType::kInt16);
+
+  Pipeline::ArgSetInfo arg_info1;
+  arg_info1.name = "";
+  arg_info1.ordinal = 0;
+  arg_info1.type = short_type;
+  arg_info1.value = int_value;
+  p.SetArg(std::move(arg_info1));
+
+  auto r = p.GenerateOpenCLPodBuffers();
+  ASSERT_FALSE(r.IsSuccess());
+  EXPECT_EQ("SET command uses incorrect data size: kernel my_main, number 0",
+            r.Error());
+}
+
+TEST_F(PipelineTest, OpenCLClone) {
+  Pipeline p(PipelineType::kCompute);
+  p.SetName("my_pipeline");
+
+  Shader cs(kShaderTypeCompute);
+  cs.SetFormat(kShaderFormatOpenCLC);
+  p.AddShader(&cs, kShaderTypeCompute);
+  p.SetShaderEntryPoint(&cs, "my_main");
+
+  // Descriptor map.
+  Pipeline::ShaderInfo::DescriptorMapEntry entry1;
+  entry1.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::POD;
+  entry1.descriptor_set = 4;
+  entry1.binding = 5;
+  entry1.arg_name = "arg_a";
+  entry1.arg_ordinal = 0;
+  entry1.pod_offset = 0;
+  entry1.pod_arg_size = 4;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry1));
+
+  Pipeline::ShaderInfo::DescriptorMapEntry entry2;
+  entry2.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::POD;
+  entry2.descriptor_set = 4;
+  entry2.binding = 5;
+  entry2.arg_name = "arg_b";
+  entry2.arg_ordinal = 0;
+  entry2.pod_offset = 4;
+  entry2.pod_arg_size = 1;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry2));
+
+  Pipeline::ShaderInfo::DescriptorMapEntry entry3;
+  entry3.kind = Pipeline::ShaderInfo::DescriptorMapEntry::Kind::POD;
+  entry3.descriptor_set = 4;
+  entry3.binding = 4;
+  entry3.arg_name = "arg_c";
+  entry3.arg_ordinal = 0;
+  entry3.pod_offset = 0;
+  entry3.pod_arg_size = 4;
+  p.GetShaders()[0].AddDescriptorEntry("my_main", std::move(entry3));
+
+  // Set commands.
+  Value int_value;
+  int_value.SetIntValue(1);
+  DatumType int_type;
+  int_type.SetType(DataType::kInt32);
+  DatumType char_type;
+  char_type.SetType(DataType::kInt8);
+
+  Pipeline::ArgSetInfo arg_info1;
+  arg_info1.name = "arg_a";
+  arg_info1.ordinal = 99;
+  arg_info1.type = int_type;
+  arg_info1.value = int_value;
+  p.SetArg(std::move(arg_info1));
+
+  Pipeline::ArgSetInfo arg_info2;
+  arg_info2.name = "arg_b";
+  arg_info2.ordinal = 99;
+  arg_info2.type = char_type;
+  arg_info2.value = int_value;
+  p.SetArg(std::move(arg_info2));
+
+  Pipeline::ArgSetInfo arg_info3;
+  arg_info3.name = "arg_c";
+  arg_info3.ordinal = 99;
+  arg_info3.type = int_type;
+  arg_info3.value = int_value;
+  p.SetArg(std::move(arg_info3));
+
+  auto clone = p.Clone();
+  auto r = clone->GenerateOpenCLPodBuffers();
+  ASSERT_TRUE(r.IsSuccess());
+  EXPECT_EQ(3U, clone->SetArgValues().size());
+  EXPECT_EQ(2U, clone->GetBuffers().size());
+
+  const auto& b1 = clone->GetBuffers()[0];
+  EXPECT_EQ(4U, b1.descriptor_set);
+  EXPECT_EQ(5U, b1.binding);
+  EXPECT_EQ(5U, b1.buffer->ValueCount());
+
+  const auto& b2 = clone->GetBuffers()[1];
+  EXPECT_EQ(4U, b2.descriptor_set);
+  EXPECT_EQ(4U, b2.binding);
+  EXPECT_EQ(4U, b2.buffer->ValueCount());
 }
 
 }  // namespace amber

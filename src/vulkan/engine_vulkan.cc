@@ -78,12 +78,14 @@ EngineVulkan::~EngineVulkan() {
   for (auto it = pipeline_map_.begin(); it != pipeline_map_.end(); ++it) {
     auto& info = it->second;
 
-    for (auto mod_it = info.shaders.begin(); mod_it != info.shaders.end();
-         ++mod_it) {
+    for (auto mod_it = info.shader_info.begin();
+         mod_it != info.shader_info.end(); ++mod_it) {
       auto vk_device = device_->GetVkDevice();
-      if (vk_device != VK_NULL_HANDLE && mod_it->second != VK_NULL_HANDLE)
-        device_->GetPtrs()->vkDestroyShaderModule(vk_device, mod_it->second,
-                                                  nullptr);
+      if (vk_device != VK_NULL_HANDLE &&
+          mod_it->second.shader != VK_NULL_HANDLE) {
+        device_->GetPtrs()->vkDestroyShaderModule(
+            vk_device, mod_it->second.shader, nullptr);
+      }
     }
   }
 }
@@ -190,6 +192,18 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
 
   info.vk_pipeline = std::move(vk_pipeline);
 
+  // Set the entry point names for the pipeline.
+  for (const auto& shader_info : pipeline->GetShaders()) {
+    VkShaderStageFlagBits stage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
+    r = ToVkShaderStage(shader_info.GetShaderType(), &stage);
+    if (!r.IsSuccess())
+      return r;
+    const auto& name = shader_info.GetEntryPoint();
+    if (!name.empty()) {
+      info.vk_pipeline->SetEntryPointName(stage, name);
+    }
+  }
+
   for (const auto& vtex_info : pipeline->GetVertexBuffers()) {
     auto fmt = vtex_info.buffer->GetFormat();
     if (!device_->IsFormatSupportedByPhysicalDevice(*fmt, vtex_info.buffer))
@@ -198,7 +212,7 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
       info.vertex_buffer = MakeUnique<VertexBuffer>(device_.get());
 
     info.vertex_buffer->SetData(static_cast<uint8_t>(vtex_info.location),
-                                vtex_info.buffer->AsFormatBuffer());
+                                vtex_info.buffer);
   }
 
   if (pipeline->GetIndexBuffer()) {
@@ -206,12 +220,17 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
     info.vk_pipeline->AsGraphics()->SetIndexBuffer(buf);
   }
 
+  if (pipeline->GetPushConstantBuffer().buffer != nullptr) {
+    r = info.vk_pipeline->AddPushConstantBuffer(
+        pipeline->GetPushConstantBuffer().buffer, 0);
+    if (!r.IsSuccess())
+      return r;
+  }
+
   for (const auto& buf_info : pipeline->GetBuffers()) {
     auto type = BufferCommand::BufferType::kSSBO;
     if (buf_info.buffer->GetBufferType() == BufferType::kUniform) {
       type = BufferCommand::BufferType::kUniform;
-    } else if (buf_info.buffer->GetBufferType() == BufferType::kPushConstant) {
-      type = BufferCommand::BufferType::kPushConstant;
     } else if (buf_info.buffer->GetBufferType() != BufferType::kStorage) {
       return Result("Vulkan: CreatePipeline - unknown buffer type: " +
                     std::to_string(static_cast<uint32_t>(
@@ -236,8 +255,8 @@ Result EngineVulkan::SetShader(amber::Pipeline* pipeline,
                                const std::vector<uint32_t>& data) {
   auto& info = pipeline_map_[pipeline];
 
-  auto it = info.shaders.find(type);
-  if (it != info.shaders.end())
+  auto it = info.shader_info.find(type);
+  if (it != info.shader_info.end())
     return Result("Vulkan::Setting Duplicated Shader Types Fail");
 
   VkShaderModuleCreateInfo create_info = VkShaderModuleCreateInfo();
@@ -252,7 +271,36 @@ Result EngineVulkan::SetShader(amber::Pipeline* pipeline,
     return Result("Vulkan::Calling vkCreateShaderModule Fail");
   }
 
-  info.shaders[type] = shader;
+  info.shader_info[type].shader = shader;
+
+  for (auto& shader_info : pipeline->GetShaders()) {
+    if (shader_info.GetShaderType() != type)
+      continue;
+
+    const auto& shader_spec_info = shader_info.GetSpecialization();
+    if (shader_spec_info.empty())
+      continue;
+
+    auto& entries = info.shader_info[type].specialization_entries;
+    entries.reset(new std::vector<VkSpecializationMapEntry>());
+    auto& entry_data = info.shader_info[type].specialization_data;
+    entry_data.reset(new std::vector<uint32_t>());
+    uint32_t i = 0;
+    for (auto pair : shader_spec_info) {
+      entries->push_back({pair.first,
+                          static_cast<uint32_t>(i * sizeof(uint32_t)),
+                          static_cast<uint32_t>(sizeof(uint32_t))});
+      entry_data->push_back(pair.second);
+      ++i;
+    }
+    auto& spec_info = info.shader_info[type].specialization_info;
+    spec_info.reset(new VkSpecializationInfo());
+    spec_info->mapEntryCount = static_cast<uint32_t>(shader_spec_info.size());
+    spec_info->pMapEntries = entries->data();
+    spec_info->dataSize = sizeof(uint32_t) * shader_spec_info.size();
+    spec_info->pData = entry_data->data();
+  }
+
   return {};
 }
 
@@ -261,9 +309,10 @@ Result EngineVulkan::GetVkShaderStageInfo(
     std::vector<VkPipelineShaderStageCreateInfo>* out) {
   auto& info = pipeline_map_[pipeline];
 
-  std::vector<VkPipelineShaderStageCreateInfo> stage_info(info.shaders.size());
+  std::vector<VkPipelineShaderStageCreateInfo> stage_info(
+      info.shader_info.size());
   uint32_t stage_count = 0;
-  for (auto it : info.shaders) {
+  for (auto& it : info.shader_info) {
     VkShaderStageFlagBits stage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
     Result r = ToVkShaderStage(it.first, &stage);
     if (!r.IsSuccess())
@@ -273,8 +322,13 @@ Result EngineVulkan::GetVkShaderStageInfo(
     stage_info[stage_count].sType =
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     stage_info[stage_count].stage = stage;
-    stage_info[stage_count].module = it.second;
+    stage_info[stage_count].module = it.second.shader;
     stage_info[stage_count].pName = nullptr;
+    if (it.second.specialization_entries &&
+        !it.second.specialization_entries->empty()) {
+      stage_info[stage_count].pSpecializationInfo =
+          it.second.specialization_info.get();
+    }
     ++stage_count;
   }
   *out = stage_info;
@@ -358,7 +412,7 @@ Result EngineVulkan::DoDrawRect(const DrawRectCommand* command) {
   format->AddComponent(FormatComponentType::kR, FormatMode::kSFloat, 32);
   format->AddComponent(FormatComponentType::kG, FormatMode::kSFloat, 32);
 
-  auto buf = MakeUnique<FormatBuffer>();
+  auto buf = MakeUnique<Buffer>();
   buf->SetFormat(std::move(format));
   buf->SetData(std::move(values));
 

@@ -51,10 +51,45 @@ if (${Dawn_FOUND})
   list(APPEND AMBER_SOURCES dawn_engine_config.cc)
 endif()
 
+if (${AMBER_ENABLE_DXC})
+  list(APPEND AMBER_SOURCES dxc_helper.cc)
+endif()
+
+if (${AMBER_ENABLE_CLSPV})
+  list(APPEND AMBER_SOURCES clspv_helper.cc)
+endif()
+
 add_library(libamber ${AMBER_SOURCES})
 amber_default_compile_options(libamber)
 target_include_directories(libamber PRIVATE "${CMAKE_BINARY_DIR}")
 set_target_properties(libamber PROPERTIES OUTPUT_NAME "amber")
+
+if (${AMBER_ENABLE_DXC})
+  target_include_directories(libamber PRIVATE
+    "${PROJECT_SOURCE_DIR}/third_party/dxc/include"
+    "${CMAKE_BINARY_DIR}/third_party/dxc/include"
+  )
+
+  add_dependencies(libamber dxcompiler)
+  target_link_libraries(libamber
+    dxcompiler
+    LLVMDxcSupport
+    LLVMOption
+    LLVMHLSL
+    LLVMScalarOpts
+  )
+endif()
+
+if (${AMBER_ENABLE_CLSPV})
+  target_include_directories(libamber PRIVATE
+    "${PROJECT_SOURCE_DIR}/third_party/clspv/include"
+  )
+
+  target_link_libraries(libamber
+    clspv_core
+    clspv_passes
+  )
+endif()
 
 if (${AMBER_ENABLE_SPIRV_TOOLS})
   target_link_libraries(libamber SPIRV-Tools)
@@ -82,13 +117,17 @@ if (${AMBER_ENABLE_TESTS})
     amberscript/parser_buffer_test.cc
     amberscript/parser_clear_color_test.cc
     amberscript/parser_clear_test.cc
+    amberscript/parser_compile_options_test.cc
     amberscript/parser_copy_test.cc
     amberscript/parser_device_feature_test.cc
     amberscript/parser_expect_test.cc
+    amberscript/parser_extension_test.cc
     amberscript/parser_framebuffer_test.cc
     amberscript/parser_pipeline_test.cc
+    amberscript/parser_pipeline_set_test.cc
     amberscript/parser_repeat_test.cc
     amberscript/parser_run_test.cc
+    amberscript/parser_set_test.cc
     amberscript/parser_shader_opt_test.cc
     amberscript/parser_shader_test.cc
     amberscript/parser_test.cc
@@ -98,6 +137,7 @@ if (${AMBER_ENABLE_TESTS})
     descriptor_set_and_binding_parser_test.cc
     executor_test.cc
     format_parser_test.cc
+    format_test.cc
     pipeline_test.cc
     result_test.cc
     script_test.cc

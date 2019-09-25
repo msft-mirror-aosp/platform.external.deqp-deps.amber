@@ -1,4 +1,4 @@
-// Copyright 2018 The Amber Authors.
+// Copyright 2019 The Amber Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,23 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SAMPLES_DAWN_DEVICE_METAL_H_
-#define SAMPLES_DAWN_DEVICE_METAL_H_
+#ifndef SRC_CLSPV_HELPER_H_
+#define SRC_CLSPV_HELPER_H_
 
-#if AMBER_DAWN_METAL
+#include <string>
+#include <vector>
 
 #include "amber/result.h"
-#include "dawn/dawncpp.h"
-#include "dawn_native/DawnNative.h"
+#include "src/pipeline.h"
 
-namespace sample {
-namespace dawn {
+namespace amber {
+namespace clspvhelper {
 
-amber::Result CreateMetalDevice(::dawn_native::Instance*, ::dawn::Device*);
+// Passes the OpenCL C source code to Clspv.
+// Returns the generated SPIR-V binary via |generated_binary| argument.
+Result Compile(Pipeline::ShaderInfo* shader_info,
+               std::vector<uint32_t>* generated_binary);
 
-}  // namespace dawn
-}  // namespace sample
+}  // namespace clspvhelper
+}  // namespace amber
 
-#endif  // AMBER_DAWN_METAL
-
-#endif  // SAMPLES_DAWN_DEVICE_METAL_H_
+#endif  // SRC_CLSPV_HELPER_H_

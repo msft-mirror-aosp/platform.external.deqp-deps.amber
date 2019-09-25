@@ -187,7 +187,7 @@ Result Pipeline::CreateVkPipelineLayout(VkPipelineLayout* pipeline_layout) {
 
   VkPushConstantRange push_const_range =
       push_constant_->GetVkPushConstantRange();
-  if (push_const_range.size) {
+  if (push_const_range.size > 0) {
     pipeline_layout_info.pushConstantRangeCount = 1U;
     pipeline_layout_info.pPushConstantRanges = &push_const_range;
   }
@@ -233,19 +233,17 @@ Result Pipeline::RecordPushConstant(const VkPipelineLayout& pipeline_layout) {
                                                      pipeline_layout);
 }
 
-Result Pipeline::AddPushConstant(const BufferCommand* command) {
-  if (!command->IsPushConstant())
-    return Result(
-        "Pipeline::AddPushConstant BufferCommand type is not push constant");
-
-  return push_constant_->AddBufferData(command);
+Result Pipeline::AddPushConstantBuffer(const Buffer* buf, uint32_t offset) {
+  if (!buf)
+    return Result("Missing push constant buffer data");
+  return push_constant_->AddBuffer(buf, offset);
 }
 
 Result Pipeline::AddDescriptor(const BufferCommand* cmd) {
   if (cmd == nullptr)
     return Result("Pipeline::AddDescriptor BufferCommand is nullptr");
   if (cmd->IsPushConstant())
-    return AddPushConstant(cmd);
+    return AddPushConstantBuffer(cmd->GetBuffer(), cmd->GetOffset());
   if (!cmd->IsSSBO() && !cmd->IsUniform())
     return Result("Pipeline::AddDescriptor not supported buffer type");
 
@@ -298,10 +296,13 @@ Result Pipeline::AddDescriptor(const BufferCommand* cmd) {
         "and binding");
   }
 
-  if (!cmd->GetValues().empty()) {
-    auto* buf_desc = static_cast<BufferDescriptor*>(desc);
-    Result r = buf_desc->AddToBuffer(cmd->GetOffset(), cmd->GetSize(),
-                                     cmd->GetValues());
+  auto* buf_desc = static_cast<BufferDescriptor*>(desc);
+  if (cmd->GetValues().empty()) {
+    Result r = buf_desc->ResizeTo(cmd->GetBuffer()->ElementCount());
+    if (!r.IsSuccess())
+      return r;
+  } else {
+    Result r = buf_desc->AddToBuffer(cmd->GetValues(), cmd->GetOffset());
     if (!r.IsSuccess())
       return r;
   }

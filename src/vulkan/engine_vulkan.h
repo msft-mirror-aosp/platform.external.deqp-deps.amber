@@ -34,6 +34,7 @@
 namespace amber {
 namespace vulkan {
 
+/// Engine implementation based on Vulkan.
 class EngineVulkan : public Engine {
  public:
   EngineVulkan();
@@ -63,8 +64,15 @@ class EngineVulkan : public Engine {
   struct PipelineInfo {
     std::unique_ptr<Pipeline> vk_pipeline;
     std::unique_ptr<VertexBuffer> vertex_buffer;
-    std::unordered_map<ShaderType, VkShaderModule, CastHash<ShaderType>>
-        shaders;
+    struct ShaderInfo {
+      VkShaderModule shader;
+      std::unique_ptr<std::vector<VkSpecializationMapEntry>>
+          specialization_entries;
+      std::unique_ptr<std::vector<uint32_t>> specialization_data;
+      std::unique_ptr<VkSpecializationInfo> specialization_info;
+    };
+    std::unordered_map<ShaderType, ShaderInfo, CastHash<ShaderType>>
+        shader_info;
   };
 
   Result GetVkShaderStageInfo(

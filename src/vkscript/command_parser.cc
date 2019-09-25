@@ -254,6 +254,12 @@ Result CommandParser::ProcessDrawRect() {
   auto cmd = MakeUnique<DrawRectCommand>(pipeline_, pipeline_data_);
   cmd->SetLine(tokenizer_->GetCurrentLine());
 
+  if (pipeline_->GetVertexBuffers().size() > 1) {
+    return Result(
+        "draw rect command is not supported in a pipeline with more than one "
+        "vertex buffer attached");
+  }
+
   auto token = tokenizer_->NextToken();
   while (token->IsString()) {
     std::string str = token->AsString();
@@ -475,8 +481,7 @@ Result CommandParser::ProcessClear() {
 
 Result CommandParser::ParseValues(const std::string& name,
                                   Format* fmt,
-                                  std::vector<Value>* values,
-                                  bool use_std430_layout) {
+                                  std::vector<Value>* values) {
   assert(values);
 
   uint32_t row_index = 0;
@@ -484,32 +489,6 @@ Result CommandParser::ParseValues(const std::string& name,
   size_t seen = 0;
   while (!token->IsEOL() && !token->IsEOS()) {
     Value v;
-
-    // VkRunner script assumes that all multi-column matrices given
-    // in a script are row-major matrices. Glslang compiler sets the
-    // stride of a matrix as std140 for SSBO and push constant and
-    // std430 for UBO. Thus, when |type| is a multi-column matrix,
-    // we fill more values for its stride. For example, the row
-    // stride of 3x2 UBO float matrix is 16 bytes but VkRunner script
-    // is supposed to take only 2 float values for a row. We need two
-    // more float values for a row.
-    if (fmt->ColumnCount() > 1U && fmt->RowCount() > 1U &&
-        row_index == fmt->RowCount()) {
-      if (use_std430_layout || fmt->RowCount() == 3U) {
-        if ((fmt->IsFloat() || fmt->IsDouble())) {
-          v.SetDoubleValue(0);
-        } else {
-          v.SetIntValue(0);
-        }
-        // For std430 layout, the stride of each row must be
-        // 4 * element size in bytes when row count is not 1.
-        // For std140 layout, the stride of each row must be
-        // 4 * element size in bytes when row count is 3 or 4.
-        for (uint32_t i = fmt->RowCount(); i < 4U; ++i)
-          values->push_back(v);
-      }
-      row_index = 0;
-    }
 
     if ((fmt->IsFloat() || fmt->IsDouble())) {
       if (!token->IsInteger() && !token->IsDouble()) {
@@ -540,7 +519,7 @@ Result CommandParser::ParseValues(const std::string& name,
 
   // This could overflow, but I don't really expect us to get command files
   // that big ....
-  size_t num_per_row = fmt->ColumnCount() * fmt->RowCount();
+  size_t num_per_row = fmt->RowCount();
   if (seen == 0 || (seen % num_per_row) != 0) {
     return Result(std::string("Incorrect number of values provided to ") +
                   name + " command");
@@ -591,7 +570,7 @@ Result CommandParser::ProcessSSBO() {
 
     auto* buffer = pipeline_->GetBufferForBinding(set, binding);
     if (!buffer) {
-      auto b = MakeUnique<DataBuffer>(BufferType::kStorage);
+      auto b = MakeUnique<Buffer>(BufferType::kStorage);
       b->SetName("AutoBuf-" + std::to_string(script_->GetBuffers().size()));
       buffer = b.get();
       script_->AddBuffer(std::move(b));
@@ -614,12 +593,11 @@ Result CommandParser::ProcessSSBO() {
       return r;
 
     auto fmt = tp.GetType().AsFormat();
-    if (cmd->GetBuffer()->GetFormat() &&
-        !cmd->GetBuffer()->GetFormat()->Equal(fmt.get())) {
+    auto* buf = cmd->GetBuffer();
+    if (buf->FormatIsDefault() || !buf->GetFormat())
+      buf->SetFormat(std::move(fmt));
+    else if (!buf->GetFormat()->Equal(fmt.get()))
       return Result("probe ssbo format does not match buffer format");
-    }
-    if (!cmd->GetBuffer()->GetFormat())
-      cmd->GetBuffer()->SetFormat(std::move(fmt));
 
     token = tokenizer_->NextToken();
     if (!token->IsInteger()) {
@@ -630,19 +608,20 @@ Result CommandParser::ProcessSSBO() {
       return Result("offset for SSBO must be positive, got: " +
                     std::to_string(token->AsInt32()));
     }
-    if ((token->AsUint32() % cmd->GetBuffer()->GetFormat()->SizeInBytes()) !=
-        0) {
+    if ((token->AsUint32() % buf->GetFormat()->SizeInBytes()) != 0) {
       return Result(
           "offset for SSBO must be a multiple of the data size expected " +
-          std::to_string(cmd->GetBuffer()->GetFormat()->SizeInBytes()));
+          std::to_string(buf->GetFormat()->SizeInBytes()));
     }
 
     cmd->SetOffset(token->AsUint32());
 
     std::vector<Value> values;
-    r = ParseValues("ssbo", cmd->GetBuffer()->GetFormat(), &values, false);
+    r = ParseValues("ssbo", buf->GetFormat(), &values);
     if (!r.IsSuccess())
       return r;
+
+    buf->RecalculateMaxSizeInBytes(values, cmd->GetOffset());
 
     cmd->SetValues(std::move(values));
 
@@ -654,13 +633,20 @@ Result CommandParser::ProcessSSBO() {
       return Result("Invalid size value for ssbo command: " +
                     token->ToOriginalString());
 
-    uint32_t size = token->AsUint32();
-    cmd->SetSize(size);
-
     // Resize the buffer so we'll correctly create the descriptor sets.
     auto* buf = cmd->GetBuffer();
-    buf->SetElementCount(size);
-    buf->ValuePtr()->resize(size);
+    buf->SetElementCount(token->AsUint32());
+
+    // Set a default format into the buffer if needed.
+    if (!buf->GetFormat()) {
+      auto fmt = MakeUnique<Format>();
+      fmt->SetFormatType(FormatType::kR8_SINT);
+      fmt->AddComponent(FormatComponentType::kR, FormatMode::kSInt, 8);
+      buf->SetFormat(std::move(fmt));
+      // This has to come after the SetFormat() call because SetFormat() resets
+      // the value back to false.
+      buf->SetFormatIsDefault(true);
+    }
 
     token = tokenizer_->NextToken();
     if (!token->IsEOS() && !token->IsEOL())
@@ -682,7 +668,7 @@ Result CommandParser::ProcessUniform() {
                   token->ToOriginalString());
 
   std::unique_ptr<BufferCommand> cmd;
-  bool use_std430_layout = false;
+  bool is_ubo = false;
   if (token->AsString() == "ubo") {
     cmd = MakeUnique<BufferCommand>(BufferCommand::BufferType::kUniform,
                                     pipeline_);
@@ -722,28 +708,33 @@ Result CommandParser::ProcessUniform() {
     } else {
       cmd->SetBinding(val);
     }
+    is_ubo = true;
 
-    use_std430_layout = true;
-  } else {
-    cmd = MakeUnique<BufferCommand>(BufferCommand::BufferType::kPushConstant,
-                                    pipeline_);
-    cmd->SetLine(tokenizer_->GetCurrentLine());
-  }
-
-  {
-    // Generate an internal buffer for this binding if needed.
     auto set = cmd->GetDescriptorSet();
     auto binding = cmd->GetBinding();
 
     auto* buffer = pipeline_->GetBufferForBinding(set, binding);
     if (!buffer) {
-      auto b = MakeUnique<DataBuffer>(BufferType::kUniform);
+      auto b = MakeUnique<Buffer>(BufferType::kUniform);
       b->SetName("AutoBuf-" + std::to_string(script_->GetBuffers().size()));
       buffer = b.get();
       script_->AddBuffer(std::move(b));
       pipeline_->AddBuffer(buffer, set, binding);
     }
     cmd->SetBuffer(buffer);
+
+  } else {
+    cmd = MakeUnique<BufferCommand>(BufferCommand::BufferType::kPushConstant,
+                                    pipeline_);
+    cmd->SetLine(tokenizer_->GetCurrentLine());
+
+    // Push constants don't have descriptor set and binding values. So, we do
+    // not want to try to lookup the buffer or we'll accidentally get whatever
+    // is bound at 0:0.
+    auto b = MakeUnique<Buffer>(BufferType::kUniform);
+    b->SetName("AutoBuf-" + std::to_string(script_->GetBuffers().size()));
+    cmd->SetBuffer(b.get());
+    script_->AddBuffer(std::move(b));
   }
 
   DatumTypeParser tp;
@@ -752,12 +743,16 @@ Result CommandParser::ProcessUniform() {
     return r;
 
   auto fmt = tp.GetType().AsFormat();
-  if (cmd->GetBuffer()->GetFormat() &&
-      !cmd->GetBuffer()->GetFormat()->Equal(fmt.get())) {
+
+  // uniform is always std140.
+  if (is_ubo)
+    fmt->SetIsStd140();
+
+  auto* buf = cmd->GetBuffer();
+  if (buf->FormatIsDefault() || !buf->GetFormat())
+    buf->SetFormat(std::move(fmt));
+  else if (!buf->GetFormat()->Equal(fmt.get()))
     return Result("probe ssbo format does not match buffer format");
-  }
-  if (!cmd->GetBuffer()->GetFormat())
-    cmd->GetBuffer()->SetFormat(std::move(fmt));
 
   token = tokenizer_->NextToken();
   if (!token->IsInteger()) {
@@ -769,15 +764,23 @@ Result CommandParser::ProcessUniform() {
                   std::to_string(token->AsInt32()));
   }
 
+  auto buf_size = static_cast<int32_t>(buf->GetFormat()->SizeInBytes());
+  if (token->AsInt32() % buf_size != 0)
+    return Result("offset for uniform must be multiple of data size");
+
   cmd->SetOffset(token->AsUint32());
 
   std::vector<Value> values;
-  r = ParseValues("uniform", cmd->GetBuffer()->GetFormat(), &values,
-                  use_std430_layout);
+  r = ParseValues("uniform", buf->GetFormat(), &values);
   if (!r.IsSuccess())
     return r;
 
-  cmd->SetValues(std::move(values));
+  buf->RecalculateMaxSizeInBytes(values, cmd->GetOffset());
+
+  if (cmd->IsPushConstant())
+    buf->SetData(values);
+  else
+    cmd->SetValues(std::move(values));
 
   commands_.push_back(std::move(cmd));
   return {};
@@ -2057,11 +2060,10 @@ Result CommandParser::ProcessProbeSSBO() {
   }
 
   auto fmt = tp.GetType().AsFormat();
-  if (buffer->GetFormat() && !buffer->GetFormat()->Equal(fmt.get()))
-    return Result("probe format does not match buffer format");
-
-  if (!buffer->GetFormat())
+  if (buffer->FormatIsDefault() || !buffer->GetFormat())
     buffer->SetFormat(tp.GetType().AsFormat());
+  else if (buffer->GetFormat() && !buffer->GetFormat()->Equal(fmt.get()))
+    return Result("probe format does not match buffer format");
 
   auto cmd = MakeUnique<ProbeSSBOCommand>(buffer);
   cmd->SetLine(cur_line);
@@ -2089,7 +2091,7 @@ Result CommandParser::ProcessProbeSSBO() {
   cmd->SetComparator(comp);
 
   std::vector<Value> values;
-  r = ParseValues("probe ssbo", cmd->GetFormat(), &values, false);
+  r = ParseValues("probe ssbo", cmd->GetFormat(), &values);
   if (!r.IsSuccess())
     return r;
 

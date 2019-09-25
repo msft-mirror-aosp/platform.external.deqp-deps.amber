@@ -18,15 +18,15 @@
 #include <cassert>
 #include <limits>
 
+#include "src/make_unique.h"
 #include "src/vulkan/command_buffer.h"
 #include "src/vulkan/device.h"
 
 namespace amber {
 namespace vulkan {
 
-PushConstant::PushConstant(Device* device) : device_(device) {
-  memory_.resize(device_->GetMaxPushConstants());
-}
+PushConstant::PushConstant(Device* device)
+    : device_(device), buffer_(MakeUnique<Buffer>()) {}
 
 PushConstant::~PushConstant() = default;
 
@@ -46,13 +46,14 @@ VkPushConstantRange PushConstant::GetVkPushConstantRange() {
   it = std::max_element(
       push_constant_data_.begin(), push_constant_data_.end(),
       [](const BufferInput& a, const BufferInput& b) {
-        return a.offset + static_cast<uint32_t>(a.size_in_bytes) <
-               b.offset + static_cast<uint32_t>(b.size_in_bytes);
+        return a.offset + static_cast<uint32_t>(a.buffer->GetSizeInBytes()) <
+               b.offset + static_cast<uint32_t>(b.buffer->GetSizeInBytes());
       });
   assert(it != push_constant_data_.end());
 
-  uint32_t size_in_bytes =
-      it->offset + static_cast<uint32_t>(it->size_in_bytes) - first_offset;
+  uint32_t size_in_bytes = it->offset +
+                           static_cast<uint32_t>(it->buffer->GetSizeInBytes()) -
+                           first_offset;
 
   VkPushConstantRange range = VkPushConstantRange();
   range.stageFlags = VK_SHADER_STAGE_ALL;
@@ -97,21 +98,14 @@ Result PushConstant::RecordPushConstantVkCommand(
   device_->GetPtrs()->vkCmdPushConstants(
       command->GetVkCommandBuffer(), pipeline_layout, VK_SHADER_STAGE_ALL,
       push_const_range.offset, push_const_range.size,
-      memory_.data() + push_const_range.offset);
+      buffer_->GetValues<uint8_t*>() + push_const_range.offset);
   return {};
 }
 
-Result PushConstant::AddBufferData(const BufferCommand* command) {
-  if (!command->IsPushConstant())
-    return Result(
-        "PushConstant::AddBufferData BufferCommand type is not push constant");
-
+Result PushConstant::AddBuffer(const Buffer* buffer, uint32_t offset) {
   push_constant_data_.emplace_back();
-  push_constant_data_.back().format = command->GetBuffer()->GetFormat();
-  push_constant_data_.back().offset = command->GetOffset();
-  push_constant_data_.back().size_in_bytes = command->GetSize();
-  push_constant_data_.back().values = command->GetValues();
-
+  push_constant_data_.back().offset = offset;
+  push_constant_data_.back().buffer = buffer;
   return {};
 }
 
@@ -121,13 +115,21 @@ Result PushConstant::UpdateMemoryWithInput(const BufferInput& input) {
         "Vulkan: UpdateMemoryWithInput BufferInput offset exceeds memory size");
   }
 
-  if (input.size_in_bytes > (device_->GetMaxPushConstants() - input.offset)) {
+  if (input.buffer->GetSizeInBytes() >
+      (device_->GetMaxPushConstants() - input.offset)) {
     return Result(
         "Vulkan: UpdateMemoryWithInput BufferInput offset + size_in_bytes "
         " exceeds memory size");
   }
 
-  input.UpdateBufferWithValues(memory_.data());
+  if (!buffer_->GetFormat()) {
+    buffer_->SetFormat(MakeUnique<Format>(*(input.buffer->GetFormat())));
+  } else if (!buffer_->GetFormat()->Equal(input.buffer->GetFormat())) {
+    return Result("Vulkan: push constants must all have the same format");
+  }
+
+  buffer_->SetDataFromBuffer(input.buffer, input.offset);
+
   return {};
 }
 

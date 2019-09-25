@@ -218,6 +218,7 @@ robustBufferAccess
 logicOp)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto script = parser.GetScript();
@@ -225,9 +226,9 @@ logicOp)";
                                         script->GetRequiredInstanceExtensions(),
                                         script->GetRequiredDeviceExtensions());
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
 
   const auto& features = ToStub(engine.get())->GetFeatures();
@@ -237,8 +238,6 @@ logicOp)";
 
   const auto& extensions = ToStub(engine.get())->GetDeviceExtensions();
   ASSERT_EQ(static_cast<size_t>(0U), extensions.size());
-
-  EXPECT_EQ(100U, ToStub(engine.get())->GetFenceTimeoutMs());
 }
 
 TEST_F(VkScriptExecutorTest, ExecutesRequiredExtensions) {
@@ -248,6 +247,7 @@ VK_KHR_storage_buffer_storage_class
 VK_KHR_variable_pointers)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto script = parser.GetScript();
@@ -255,9 +255,9 @@ VK_KHR_variable_pointers)";
                                         script->GetRequiredInstanceExtensions(),
                                         script->GetRequiredDeviceExtensions());
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
 
   const auto& features = ToStub(engine.get())->GetFeatures();
@@ -267,8 +267,6 @@ VK_KHR_variable_pointers)";
   ASSERT_EQ(2U, extensions.size());
   EXPECT_EQ("VK_KHR_storage_buffer_storage_class", extensions[0]);
   EXPECT_EQ("VK_KHR_variable_pointers", extensions[1]);
-
-  EXPECT_EQ(100U, ToStub(engine.get())->GetFenceTimeoutMs());
 }
 
 TEST_F(VkScriptExecutorTest, ExecutesRequiredFrameBuffers) {
@@ -278,6 +276,7 @@ framebuffer R32G32B32A32_SFLOAT
 depthstencil D24_UNORM_S8_UINT)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto script = parser.GetScript();
@@ -285,9 +284,9 @@ depthstencil D24_UNORM_S8_UINT)";
                                         script->GetRequiredInstanceExtensions(),
                                         script->GetRequiredDeviceExtensions());
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
 
   const auto& features = ToStub(engine.get())->GetFeatures();
@@ -295,8 +294,6 @@ depthstencil D24_UNORM_S8_UINT)";
 
   const auto& extensions = ToStub(engine.get())->GetDeviceExtensions();
   ASSERT_EQ(static_cast<size_t>(0U), extensions.size());
-
-  EXPECT_EQ(100U, ToStub(engine.get())->GetFenceTimeoutMs());
 }
 
 TEST_F(VkScriptExecutorTest, ExecutesRequiredFenceTimeout) {
@@ -305,6 +302,7 @@ TEST_F(VkScriptExecutorTest, ExecutesRequiredFenceTimeout) {
 fence_timeout 12345)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto script = parser.GetScript();
@@ -312,9 +310,9 @@ fence_timeout 12345)";
                                         script->GetRequiredInstanceExtensions(),
                                         script->GetRequiredDeviceExtensions());
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
 
   const auto& features = ToStub(engine.get())->GetFeatures();
@@ -338,6 +336,7 @@ depthstencil D24_UNORM_S8_UINT
 fence_timeout 12345)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto script = parser.GetScript();
@@ -345,9 +344,9 @@ fence_timeout 12345)";
                                         script->GetRequiredInstanceExtensions(),
                                         script->GetRequiredDeviceExtensions());
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
 
   const auto& features = ToStub(engine.get())->GetFeatures();
@@ -369,14 +368,15 @@ TEST_F(VkScriptExecutorTest, ClearCommand) {
 clear)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   EXPECT_TRUE(ToStub(engine.get())->DidClearCommand());
 }
@@ -387,15 +387,16 @@ TEST_F(VkScriptExecutorTest, ClearCommandFailure) {
 clear)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   ToStub(engine.get())->FailClearCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("clear command failed", r.Error());
 }
@@ -406,14 +407,15 @@ TEST_F(VkScriptExecutorTest, ClearColorCommand) {
 clear color 244 123 123 13)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidClearColorCommand());
 
@@ -433,15 +435,16 @@ TEST_F(VkScriptExecutorTest, ClearColorCommandFailure) {
 clear color 123 123 123 123)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   ToStub(engine.get())->FailClearColorCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("clear color command failed", r.Error());
 }
@@ -452,14 +455,15 @@ TEST_F(VkScriptExecutorTest, ClearDepthCommand) {
 clear depth 24)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidClearDepthCommand());
 }
@@ -470,15 +474,16 @@ TEST_F(VkScriptExecutorTest, ClearDepthCommandFailure) {
 clear depth 24)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   ToStub(engine.get())->FailClearDepthCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("clear depth command failed", r.Error());
 }
@@ -489,14 +494,15 @@ TEST_F(VkScriptExecutorTest, ClearStencilCommand) {
 clear stencil 24)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidClearStencilCommand());
 }
@@ -507,15 +513,16 @@ TEST_F(VkScriptExecutorTest, ClearStencilCommandFailure) {
 clear stencil 24)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   ToStub(engine.get())->FailClearStencilCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("clear stencil command failed", r.Error());
 }
@@ -526,14 +533,15 @@ TEST_F(VkScriptExecutorTest, DrawRectCommand) {
 draw rect 2 4 10 20)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidDrawRectCommand());
 }
@@ -544,15 +552,16 @@ TEST_F(VkScriptExecutorTest, DrawRectCommandFailure) {
 draw rect 2 4 10 20)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   ToStub(engine.get())->FailDrawRectCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("draw rect command failed", r.Error());
 }
@@ -563,14 +572,15 @@ TEST_F(VkScriptExecutorTest, DrawArraysCommand) {
 draw arrays TRIANGLE_LIST 0 0)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidDrawArraysCommand());
 }
@@ -581,15 +591,16 @@ TEST_F(VkScriptExecutorTest, DrawArraysCommandFailure) {
 draw arrays TRIANGLE_LIST 0 0)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   ToStub(engine.get())->FailDrawArraysCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("draw arrays command failed", r.Error());
 }
@@ -600,14 +611,15 @@ TEST_F(VkScriptExecutorTest, ComputeCommand) {
 compute 2 3 4)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidComputeCommand());
 }
@@ -618,15 +630,16 @@ TEST_F(VkScriptExecutorTest, ComputeCommandFailure) {
 compute 2 3 4)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   ToStub(engine.get())->FailComputeCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("compute command failed", r.Error());
 }
@@ -637,14 +650,15 @@ TEST_F(VkScriptExecutorTest, EntryPointCommand) {
 vertex entrypoint main)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidEntryPointCommand());
 }
@@ -655,15 +669,16 @@ TEST_F(VkScriptExecutorTest, EntryPointCommandFailure) {
 vertex entrypoint main)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   ToStub(engine.get())->FailEntryPointCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("entrypoint command failed", r.Error());
 }
@@ -674,14 +689,15 @@ TEST_F(VkScriptExecutorTest, PatchParameterVerticesCommand) {
 patch parameter vertices 10)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidPatchParameterVerticesCommand());
 }
@@ -692,15 +708,16 @@ TEST_F(VkScriptExecutorTest, PatchParameterVerticesCommandFailure) {
 patch parameter vertices 10)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   ToStub(engine.get())->FailPatchParameterVerticesCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("patch command failed", r.Error());
 }
@@ -716,9 +733,9 @@ probe rect rgba 2 3 40 40 0.2 0.4 0.4 0.3)";
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   // ASSERT_TRUE(ToStub(engine.get())->DidProbeCommand());
 }
@@ -735,9 +752,9 @@ probe rect rgba 2 3 40 40 0.2 0.4 0.4 0.3)";
   // ToStub(engine.get())->FailProbeCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("probe command failed", r.Error());
 }
@@ -748,14 +765,15 @@ TEST_F(VkScriptExecutorTest, BufferCommand) {
 ssbo 0 24)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidBufferCommand());
 }
@@ -766,15 +784,16 @@ TEST_F(VkScriptExecutorTest, BufferCommandFailure) {
 ssbo 0 24)";
 
   Parser parser;
+  parser.SkipValidationForTest();
   ASSERT_TRUE(parser.Parse(input).IsSuccess());
 
   auto engine = MakeEngine();
   ToStub(engine.get())->FailBufferCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("buffer command failed", r.Error());
 }
@@ -790,9 +809,9 @@ probe ssbo vec3 0 2 <= 2 3 4)";
   auto engine = MakeEngine();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   // ASSERT_TRUE(ToStub(engine.get())->DidProbeSSBOCommand());
 }
@@ -809,9 +828,9 @@ probe ssbo vec3 0 2 <= 2 3 4)";
   // ToStub(engine.get())->FailProbeSSBOCommand();
   auto script = parser.GetScript();
 
+  Options options;
   Executor ex;
-  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(),
-                        ExecutionType::kExecute);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("probe ssbo command failed", r.Error());
 }

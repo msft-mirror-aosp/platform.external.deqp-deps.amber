@@ -25,11 +25,14 @@
 
 #include "amber/recipe.h"
 #include "samples/config_helper.h"
-#include "samples/png.h"
 #include "samples/ppm.h"
 #include "samples/timestamp.h"
 #include "src/build-versions.h"
 #include "src/make_unique.h"
+
+#if AMBER_ENABLE_LODEPNG
+#include "samples/png.h"
+#endif  // AMBER_ENABLE_LODEPNG
 
 namespace {
 
@@ -40,9 +43,11 @@ struct Options {
 
   std::string image_filename;
   std::string buffer_filename;
+  std::string fb_name = kGeneratedColorBuffer;
   std::vector<amber::BufferInfo> buffer_to_dump;
   uint32_t engine_major = 1;
   uint32_t engine_minor = 0;
+  int32_t fence_timeout = -1;
   bool parse_only = false;
   bool pipeline_create_only = false;
   bool disable_validation_layer = false;
@@ -51,6 +56,8 @@ struct Options {
   bool show_version_info = false;
   bool log_graphics_calls = false;
   bool log_graphics_calls_time = false;
+  bool log_execute_calls = false;
+  bool disable_spirv_validation = false;
   amber::EngineType engine = amber::kEngineTypeVulkan;
   std::string spv_env;
 };
@@ -62,8 +69,17 @@ const char kUsage[] = R"(Usage: amber [options] SCRIPT [SCRIPTS...]
   -ps                       -- Parse input files, create pipelines; Don't execute.
   -q                        -- Disable summary output.
   -d                        -- Disable validation layers.
-  -t <spirv_env>            -- The target SPIR-V environment. Defaults to SPV_ENV_UNIVERSAL_1_0.
-  -i <filename>             -- Write rendering to <filename> as a PNG image if it ends with '.png', or as a PPM image otherwise.
+  -f <value>                -- Sets the fence timeout value to |value|
+  -t <spirv_env>            -- The target SPIR-V environment e.g., spv1.3, vulkan1.1.
+                               If a SPIR-V environment, assume the lowest version of Vulkan that
+                               requires support of that version of SPIR-V.
+                               If a Vulkan environment, use the highest version of SPIR-V required
+                               to be supported by that version of Vulkan.
+                               Use vulkan1.1spv1.4 for SPIR-V 1.4 with Vulkan 1.1.
+                               Defaults to spv1.0.
+  -i <filename>             -- Write rendering to <filename> as a PNG image if it ends with '.png',
+                               or as a PPM image otherwise.
+  -I <buffername>           -- Name of framebuffer to dump. Defaults to 'framebuffer'.
   -b <filename>             -- Write contents of a UBO or SSBO to <filename>.
   -B [<desc set>:]<binding> -- Descriptor set and binding of buffer to write.
                                Default is [0:]0.
@@ -72,6 +88,8 @@ const char kUsage[] = R"(Usage: amber [options] SCRIPT [SCRIPTS...]
   -V, --version             -- Output version information for Amber and libraries.
   --log-graphics-calls      -- Log graphics API calls (only for Vulkan so far).
   --log-graphics-calls-time -- Log timing of graphics API calls timing (Vulkan only).
+  --log-execute-calls       -- Log each execute call before run.
+  --disable-spirv-val       -- Disable SPIR-V validation.
   -h                        -- This help text.
 )";
 
@@ -85,6 +103,14 @@ bool ParseArgs(const std::vector<std::string>& args, Options* opts) {
         return false;
       }
       opts->image_filename = args[i];
+
+    } else if (arg == "-I") {
+      ++i;
+      if (i >= args.size()) {
+        std::cerr << "Missing value for -I argument." << std::endl;
+        return false;
+      }
+      opts->fb_name = args[i];
 
     } else if (arg == "-b") {
       ++i;
@@ -119,6 +145,20 @@ bool ParseArgs(const std::vector<std::string>& args, Options* opts) {
             << std::endl;
         return false;
       }
+    } else if (arg == "-f") {
+      ++i;
+      if (i >= args.size()) {
+        std::cerr << "Missing value for -f argument." << std::endl;
+        return false;
+      }
+
+      int32_t val = std::stoi(std::string(args[i]));
+      if (val < 0) {
+        std::cerr << "Fence timeout must be non-negative" << std::endl;
+        return false;
+      }
+      opts->fence_timeout = val;
+
     } else if (arg == "-t") {
       ++i;
       if (i >= args.size()) {
@@ -169,6 +209,10 @@ bool ParseArgs(const std::vector<std::string>& args, Options* opts) {
       opts->log_graphics_calls = true;
     } else if (arg == "--log-graphics-calls-time") {
       opts->log_graphics_calls_time = true;
+    } else if (arg == "--log-execute-calls") {
+      opts->log_execute_calls = true;
+    } else if (arg == "--disable-spirv-val") {
+      opts->disable_spirv_validation = true;
     } else if (arg.size() > 0 && arg[0] == '-') {
       std::cerr << "Unrecognized option " << arg << std::endl;
       return false;
@@ -196,6 +240,7 @@ std::string ReadFile(const std::string& input_file) {
   uint64_t tell_file_size = static_cast<uint64_t>(ftell(file));
   if (tell_file_size <= 0) {
     std::cerr << "Input file of incorrect size: " << input_file << std::endl;
+    fclose(file);
     return {};
   }
   fseek(file, 0, SEEK_SET);
@@ -217,8 +262,7 @@ std::string ReadFile(const std::string& input_file) {
 
 class SampleDelegate : public amber::Delegate {
  public:
-  SampleDelegate()
-      : log_graphics_calls_(false), log_graphics_calls_time_(false) {}
+  SampleDelegate() = default;
   ~SampleDelegate() override = default;
 
   void Log(const std::string& message) override {
@@ -226,15 +270,18 @@ class SampleDelegate : public amber::Delegate {
   }
 
   bool LogGraphicsCalls() const override { return log_graphics_calls_; }
-
   void SetLogGraphicsCalls(bool log_graphics_calls) {
     log_graphics_calls_ = log_graphics_calls;
+  }
+
+  bool LogExecuteCalls() const override { return log_execute_calls_; }
+  void SetLogExecuteCalls(bool log_execute_calls) {
+    log_execute_calls_ = log_execute_calls;
   }
 
   bool LogGraphicsCallsTime() const override {
     return log_graphics_calls_time_;
   }
-
   void SetLogGraphicsCallsTime(bool log_graphics_calls_time) {
     log_graphics_calls_time_ = log_graphics_calls_time;
     if (log_graphics_calls_time) {
@@ -248,8 +295,9 @@ class SampleDelegate : public amber::Delegate {
   }
 
  private:
-  bool log_graphics_calls_;
-  bool log_graphics_calls_time_;
+  bool log_graphics_calls_ = false;
+  bool log_graphics_calls_time_ = false;
+  bool log_execute_calls_ = false;
 };
 
 }  // namespace
@@ -305,6 +353,9 @@ int main(int argc, const char** argv) {
       continue;
     }
 
+    if (options.fence_timeout > -1)
+      recipe->SetFenceTimeout(static_cast<uint32_t>(options.fence_timeout));
+
     recipe_data.emplace_back();
     recipe_data.back().file = file;
     recipe_data.back().recipe = std::move(recipe);
@@ -314,18 +365,21 @@ int main(int argc, const char** argv) {
     return 0;
 
   SampleDelegate delegate;
-  if (options.log_graphics_calls) {
+  if (options.log_graphics_calls)
     delegate.SetLogGraphicsCalls(true);
-  }
-  if (options.log_graphics_calls_time) {
+  if (options.log_graphics_calls_time)
     delegate.SetLogGraphicsCallsTime(true);
-  }
+  if (options.log_execute_calls)
+    delegate.SetLogExecuteCalls(true);
 
   amber::Options amber_options;
   amber_options.engine = options.engine;
   amber_options.spv_env = options.spv_env;
-  amber_options.pipeline_create_only = options.pipeline_create_only;
+  amber_options.execution_type = options.pipeline_create_only
+                                     ? amber::ExecutionType::kPipelineCreateOnly
+                                     : amber::ExecutionType::kExecute;
   amber_options.delegate = &delegate;
+  amber_options.disable_spirv_validation = options.disable_spirv_validation;
 
   std::set<std::string> required_features;
   std::set<std::string> required_device_extensions;
@@ -379,7 +433,8 @@ int main(int argc, const char** argv) {
 
   if (!options.image_filename.empty()) {
     amber::BufferInfo buffer_info;
-    buffer_info.buffer_name = kGeneratedColorBuffer;
+    buffer_info.buffer_name = options.fb_name;
+    buffer_info.is_image_buffer = true;
     amber_options.extractions.push_back(buffer_info);
   }
 
@@ -403,10 +458,14 @@ int main(int argc, const char** argv) {
       bool usePNG = pos != std::string::npos &&
                     options.image_filename.substr(pos + 1) == "png";
       for (const amber::BufferInfo& buffer_info : amber_options.extractions) {
-        if (buffer_info.buffer_name == kGeneratedColorBuffer) {
+        if (buffer_info.buffer_name == options.fb_name) {
           if (usePNG) {
+#if AMBER_ENABLE_LODEPNG
             result = png::ConvertToPNG(buffer_info.width, buffer_info.height,
                                        buffer_info.values, &out_buf);
+#else   // AMBER_ENABLE_LODEPNG
+            result = amber::Result("PNG support not enabled");
+#endif  // AMBER_ENABLE_LODEPNG
           } else {
             ppm::ConvertToPPM(buffer_info.width, buffer_info.height,
                               buffer_info.values, &out_buf);
@@ -439,7 +498,7 @@ int main(int argc, const char** argv) {
         std::cerr << options.buffer_filename << std::endl;
       } else {
         for (const amber::BufferInfo& buffer_info : amber_options.extractions) {
-          if (buffer_info.buffer_name == kGeneratedColorBuffer)
+          if (buffer_info.buffer_name == options.fb_name)
             continue;
 
           buffer_file << buffer_info.buffer_name << std::endl;
