@@ -30,6 +30,7 @@ class Tokenizer;
 
 namespace amberscript {
 
+/// Parser for the `AmberScript` format.
 class Parser : public amber::Parser {
  public:
   Parser();
@@ -48,36 +49,42 @@ class Parser : public amber::Parser {
   Result ValidateEndOfStatement(const std::string& name);
 
   Result ParseBuffer();
-  Result ParseBufferInitializer(DataBuffer*);
-  Result ParseBufferInitializerSize(DataBuffer*);
-  Result ParseBufferInitializerFill(DataBuffer*, uint32_t);
-  Result ParseBufferInitializerSeries(DataBuffer*, uint32_t);
-  Result ParseBufferInitializerData(DataBuffer*);
+  Result ParseBufferInitializer(Buffer*);
+  Result ParseBufferInitializerSize(Buffer*);
+  Result ParseBufferInitializerFill(Buffer*, uint32_t);
+  Result ParseBufferInitializerSeries(Buffer*, uint32_t);
+  Result ParseBufferInitializerData(Buffer*);
   Result ParseShaderBlock();
   Result ParsePipelineBlock();
   Result ParsePipelineAttach(Pipeline*);
   Result ParsePipelineShaderOptimizations(Pipeline*);
+  Result ParsePipelineShaderCompileOptions(Pipeline*);
   Result ParsePipelineFramebufferSize(Pipeline*);
   Result ParsePipelineBind(Pipeline*);
   Result ParsePipelineVertexData(Pipeline*);
   Result ParsePipelineIndexData(Pipeline*);
+  Result ParsePipelineSet(Pipeline*);
   Result ParseRun();
   Result ParseClear();
   Result ParseClearColor();
   Result ParseExpect();
   Result ParseCopy();
   Result ParseDeviceFeature();
+  Result ParseDeviceExtension();
+  Result ParseInstanceExtension();
   Result ParseRepeat();
+  Result ParseSet();
   bool IsRepeatable(const std::string& name) const;
   Result ParseRepeatableCommand(const std::string& name);
   Result ParseDerivePipelineBlock();
   Result ParsePipelineBody(const std::string& cmd_name,
                            std::unique_ptr<Pipeline> pipeline);
+  Result ParseShaderSpecialization(Pipeline* pipeline);
 
-  // Parses a set of values out of the token stream. |name| is the name of the
-  // current command we're parsing for error purposes. The |type| is the type
-  // of data we expect for the current buffer. |values| will be appended to with
-  // the parsed values.
+  /// Parses a set of values out of the token stream. |name| is the name of the
+  /// current command we're parsing for error purposes. The |type| is the type
+  /// of data we expect for the current buffer. |values| will be appended to
+  /// with the parsed values.
   Result ParseValues(const std::string& name,
                      Format* fmt,
                      std::vector<Value>* values);

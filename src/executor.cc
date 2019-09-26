@@ -30,14 +30,16 @@ Executor::Executor() = default;
 Executor::~Executor() = default;
 
 Result Executor::CompileShaders(const amber::Script* script,
-                                const ShaderMap& shader_map) {
+                                const ShaderMap& shader_map,
+                                Options* options) {
   for (auto& pipeline : script->GetPipelines()) {
     for (auto& shader_info : pipeline->GetShaders()) {
-      ShaderCompiler sc(script->GetSpvTargetEnv());
+      ShaderCompiler sc(script->GetSpvTargetEnv(),
+                        options->disable_spirv_validation);
 
       Result r;
       std::vector<uint32_t> data;
-      std::tie(r, data) = sc.Compile(shader_info.GetShader(), shader_map);
+      std::tie(r, data) = sc.Compile(&shader_info, shader_map);
       if (!r.IsSuccess())
         return r;
 
@@ -50,13 +52,23 @@ Result Executor::CompileShaders(const amber::Script* script,
 Result Executor::Execute(Engine* engine,
                          const amber::Script* script,
                          const ShaderMap& shader_map,
-                         ExecutionType executionType) {
+                         Options* options) {
   engine->SetEngineData(script->GetEngineData());
 
   if (!script->GetPipelines().empty()) {
-    Result r = CompileShaders(script, shader_map);
+    Result r = CompileShaders(script, shader_map, options);
     if (!r.IsSuccess())
       return r;
+
+    // OpenCL specific pipeline updates.
+    for (auto& pipeline : script->GetPipelines()) {
+      r = pipeline->UpdateOpenCLBufferBindings();
+      if (!r.IsSuccess())
+        return r;
+      r = pipeline->GenerateOpenCLPodBuffers();
+      if (!r.IsSuccess())
+        return r;
+    }
 
     for (auto& pipeline : script->GetPipelines()) {
       r = engine->CreatePipeline(pipeline.get());
@@ -65,11 +77,16 @@ Result Executor::Execute(Engine* engine,
     }
   }
 
-  if (executionType == ExecutionType::kPipelineCreateOnly)
+  if (options->execution_type == ExecutionType::kPipelineCreateOnly)
     return {};
 
   // Process Commands
   for (const auto& cmd : script->GetCommands()) {
+    if (options->delegate && options->delegate->LogExecuteCalls()) {
+      options->delegate->Log(std::to_string(cmd->GetLine()) + ": " +
+                             cmd->ToString());
+    }
+
     Result r = ExecuteCommand(engine, cmd.get());
     if (!r.IsSuccess())
       return r;
@@ -79,9 +96,7 @@ Result Executor::Execute(Engine* engine,
 
 Result Executor::ExecuteCommand(Engine* engine, Command* cmd) {
   if (cmd->IsProbe()) {
-    assert(cmd->AsProbe()->GetBuffer()->IsFormatBuffer());
-
-    auto* buffer = cmd->AsProbe()->GetBuffer()->AsFormatBuffer();
+    auto* buffer = cmd->AsProbe()->GetBuffer();
     assert(buffer);
 
     Format* fmt = buffer->GetFormat();
@@ -110,7 +125,12 @@ Result Executor::ExecuteCommand(Engine* engine, Command* cmd) {
     auto compare = cmd->AsCompareBuffer();
     auto buffer_1 = compare->GetBuffer1();
     auto buffer_2 = compare->GetBuffer2();
-    return buffer_1->IsEqual(buffer_2);
+    switch (compare->GetComparator()) {
+      case CompareBufferCommand::Comparator::kRmse:
+        return buffer_1->CompareRMSE(buffer_2, compare->GetTolerance());
+      case CompareBufferCommand::Comparator::kEq:
+        return buffer_1->IsEqual(buffer_2);
+    }
   }
   if (cmd->IsCopy()) {
     auto copy = cmd->AsCopy();

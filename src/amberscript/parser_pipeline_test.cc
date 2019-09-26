@@ -197,7 +197,6 @@ END)";
   ASSERT_TRUE(buf1.buffer != nullptr);
 
   Buffer* buffer1 = buf1.buffer;
-  ASSERT_TRUE(buffer1->IsFormatBuffer());
   EXPECT_EQ(FormatType::kB8G8R8A8_UNORM, buffer1->GetFormat()->GetFormatType());
   EXPECT_EQ(0, buf1.location);
   EXPECT_EQ(250 * 250, buffer1->ElementCount());
@@ -413,6 +412,42 @@ END
   Result r = parser.Parse(in);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("3: missing pipeline name for DERIVE_PIPELINE command", r.Error());
+}
+
+TEST_F(AmberScriptParserTest, DerivePipelineSpecialized) {
+  std::string in = R"(
+SHADER compute my_shader GLSL
+#shaders
+END
+PIPELINE compute p1
+  ATTACH my_shader SPECIALIZE 3 AS uint32 4
+END
+DERIVE_PIPELINE p2 FROM p1
+END
+)";
+
+  Parser parser;
+  Result r = parser.Parse(in);
+  EXPECT_EQ("", r.Error());
+  ASSERT_TRUE(r.IsSuccess());
+
+  auto script = parser.GetScript();
+  const auto& pipelines = script->GetPipelines();
+  ASSERT_EQ(2U, pipelines.size());
+
+  const auto* p1 = pipelines[0].get();
+  const auto& s1 = p1->GetShaders();
+  ASSERT_EQ(1U, s1.size());
+
+  EXPECT_EQ(1, s1[0].GetSpecialization().size());
+  EXPECT_EQ(4, s1[0].GetSpecialization().at(3));
+
+  const auto* p2 = pipelines[1].get();
+  const auto& s2 = p2->GetShaders();
+  ASSERT_EQ(1U, s2.size());
+
+  EXPECT_EQ(1, s2[0].GetSpecialization().size());
+  EXPECT_EQ(4, s2[0].GetSpecialization().at(3));
 }
 
 }  // namespace amberscript

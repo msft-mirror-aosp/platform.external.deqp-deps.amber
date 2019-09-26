@@ -58,6 +58,11 @@ class Script : public RecipeImpl {
     return engine_info_.required_instance_extensions;
   }
 
+  /// Sets the fence timeout to |timeout_ms|.
+  void SetFenceTimeout(uint32_t timeout_ms) override {
+    engine_data_.fence_timeout_ms = timeout_ms;
+  }
+
   /// Adds |pipeline| to the list of known pipelines. The |pipeline| must have
   /// a unique name over all pipelines in the script.
   Result AddPipeline(std::unique_ptr<Pipeline> pipeline) {
@@ -130,7 +135,19 @@ class Script : public RecipeImpl {
     engine_info_.required_features.push_back(feature);
   }
 
+  /// Adds |ext| to the list of device extensions that must be supported.
+  void AddRequiredDeviceExtension(const std::string& ext) {
+    engine_info_.required_device_extensions.push_back(ext);
+  }
+
+  /// Adds |ext| to the list of instance extensions that must be supported.
+  void AddRequiredInstanceExtension(const std::string& ext) {
+    engine_info_.required_instance_extensions.push_back(ext);
+  }
+
   /// Adds |ext| to the list of extensions that must be supported by the engine.
+  /// Note, this should only be used by the VkScript engine where there is no
+  /// differentiation between the types of extensions.
   void AddRequiredExtension(const std::string& ext);
 
   /// Retrieves the engine configuration data for this script.

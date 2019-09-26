@@ -38,10 +38,10 @@ syn keyword amberBlockCmd VERTEX_DATA INDEX_DATA INDEXED IMAGE_ATTACHMENT
 syn keyword amberBlockCmd DEPTH_STENCIL_ATTACHMENT DEVICE_FEATURE TOLERANCE
 syn keyword amberBlockCmd REPEAT COPY DERIVE_PIPELINE FROM
 
-syn keyword amberComparator EQ NE LT LE GT GE EQ_RGB EQ_RGBA EQ_BUFFER
+syn keyword amberComparator EQ NE LT LE GT GE EQ_RGB EQ_RGBA EQ_BUFFER RMSE_BUFFER
 
 syn keyword amberKeyword compute vertex geometry fragment graphics
-syn keyword amberKeyword tessellation_evaulation tessellation_control
+syn keyword amberKeyword tessellation_evaulation tessellation_control multi
 
 syn keyword amberFormat GLSL HLSL SPIRV-ASM SPIRV-HEX OPENCL-C
 
@@ -50,7 +50,7 @@ syn keyword amberTopology line_strip line_strip_with_adjacency triangle_list
 syn keyword amberTopology triangle_list_with_adjacench triangle_strip
 syn keyword amberTopology triangle_strip_with_adjacency triangle_fan patch_list
 
-syn keyword amberBufferType uniform storage push_constant
+syn keyword amberBufferType uniform storage push_constant color depth_stencil
 
 let b:current_syntax = "amber"
 hi def link amberTodo Todo

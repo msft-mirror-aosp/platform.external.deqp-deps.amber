@@ -28,9 +28,6 @@
 
 namespace amber {
 
-class DataBuffer;
-class FormatBuffer;
-
 /// Types of buffers which can be created.
 enum class BufferType : int8_t {
   /// Unknown buffer type
@@ -57,47 +54,41 @@ enum class BufferType : int8_t {
 /// maybe created as needed. A buffer must have a unique name.
 class Buffer {
  public:
+  /// Create a buffer of unknown type.
+  Buffer();
   /// Create a buffer of |type_|.
   explicit Buffer(BufferType type);
 
-  virtual ~Buffer();
-
-  /// Returns |true| if this is a buffer described by a |DatumType|.
-  virtual bool IsDataBuffer() const { return false; }
-  /// Returns |true| if this is a buffer described by a |Format|.
-  virtual bool IsFormatBuffer() const { return false; }
-
-  /// Converts the buffer to a |DataBuffer|. Note, |IsDataBuffer| must be true
-  /// for this method to be used.
-  DataBuffer* AsDataBuffer();
-  /// Converts the buffer to a |FormatBuffer|. Note, |IsFormatBuffer| must be
-  /// true for this method to be used.
-  FormatBuffer* AsFormatBuffer();
+  ~Buffer();
 
   /// Returns the BufferType of this buffer.
   BufferType GetBufferType() const { return buffer_type_; }
+  /// Sets the BufferType for this buffer.
   void SetBufferType(BufferType type) { buffer_type_ = type; }
-
-  /// Set the location binding value for the buffer.
-  void SetLocation(uint8_t loc) { location_ = loc; }
-  /// Get the location binding value for the buffer.
-  uint8_t GetLocation() const { return location_; }
 
   /// Sets the Format of the buffer to |format|.
   void SetFormat(std::unique_ptr<Format> format) {
+    format_is_default_ = false;
     format_ = std::move(format);
   }
   /// Returns the Format describing the buffer data.
-  Format* GetFormat() { return format_.get(); }
+  Format* GetFormat() const { return format_.get(); }
+
+  void SetFormatIsDefault(bool val) { format_is_default_ = val; }
+  bool FormatIsDefault() const { return format_is_default_; }
 
   /// Sets the buffer |name|.
   void SetName(const std::string& name) { name_ = name; }
   /// Returns the name of the buffer.
   std::string GetName() const { return name_; }
 
+  /// Gets the number of elements this buffer is wide.
   uint32_t GetWidth() const { return width_; }
+  /// Set the number of elements wide for the buffer.
   void SetWidth(uint32_t width) { width_ = width; }
+  /// Get the number of elements this buffer is high.
   uint32_t GetHeight() const { return height_; }
+  /// Set the number of elements high for the buffer.
   void SetHeight(uint32_t height) { height_ = height; }
 
   // | ---------- Element ---------- | ElementCount == 1
@@ -109,6 +100,7 @@ class Buffer {
 
   /// Sets the number of elements in the buffer.
   void SetElementCount(uint32_t count) { element_count_ = count; }
+  /// Returns the number of elements in the buffer.
   uint32_t ElementCount() const { return element_count_; }
 
   /// Sets the number of values in the buffer.
@@ -117,11 +109,17 @@ class Buffer {
       element_count_ = 0;
       return;
     }
-    if (format_->GetPackSize() > 0)
+    if (format_->GetPackSize() > 0) {
       element_count_ = count;
-    else
-      element_count_ = count / format_->ValuesPerElement();
+    } else {
+      // This divides by the needed input values, not the values per element.
+      // The assumption being the values coming in are read from the input,
+      // where components are specified. The needed values maybe less then the
+      // values per element.
+      element_count_ = count / format_->InputNeededPerElement();
+    }
   }
+  /// Returns the number of values in the buffer.
   uint32_t ValueCount() const {
     if (!format_)
       return 0;
@@ -138,16 +136,55 @@ class Buffer {
     return ElementCount() * format_->SizeInBytes();
   }
 
-  /// Sets the data into the buffer. The size will also be updated to be the
-  /// size of the data provided.
-  virtual Result SetData(const std::vector<Value>& data) = 0;
+  /// Returns the number of bytes for one element in the buffer.
+  uint32_t GetTexelStride() { return format_->SizeInBytes(); }
 
-  std::vector<uint8_t>* ValuePtr() { return &values_; }
-  const std::vector<uint8_t>* ValuePtr() const { return &values_; }
+  /// Returns the number of bytes for one row of elements in the buffer.
+  uint32_t GetRowStride() { return GetTexelStride() * GetWidth(); }
 
+  /// Sets the data into the buffer.
+  Result SetData(const std::vector<Value>& data);
+
+  /// Resizes the buffer to hold |element_count| elements. This is separate
+  /// from SetElementCount() because we may not know the format when we set the
+  /// initial count. This requires the format to have been set.
+  void ResizeTo(uint32_t element_count);
+
+  /// Resizes the buffer to hold |size_in_bytes|/format_->SizeInBytes()
+  /// number of elements while resizing the buffer to |size_in_bytes| bytes.
+  /// This requires the format to have been set. This is separate from
+  /// ResizeTo() since the given argument here is |size_in_bytes| bytes vs
+  /// |element_count| elements
+  void SetSizeInBytes(uint32_t size_in_bytes);
+
+  /// Sets the max_size_in_bytes_ to |max_size_in_bytes| bytes
+  void SetMaxSizeInBytes(uint32_t max_size_in_bytes);
+  /// Returns max_size_in_bytes_ if it is not zero. Otherwise it means this
+  /// buffer is an amber buffer which has a fix size and returns
+  /// GetSizeInBytes()
+  uint32_t GetMaxSizeInBytes() const;
+
+  /// Write |data| into the buffer |offset| bytes from the start. Write
+  /// |size_in_bytes| of data.
+  Result SetDataWithOffset(const std::vector<Value>& data, uint32_t offset);
+
+  /// At each ubo, ssbo size and ssbo subdata size calls, recalculates
+  /// max_size_in_bytes_ and updates it if underlying buffer got bigger
+  Result RecalculateMaxSizeInBytes(const std::vector<Value>& data,
+                                   uint32_t offset);
+
+  /// Writes |src| data into buffer at |offset|.
+  Result SetDataFromBuffer(const Buffer* src, uint32_t offset);
+
+  /// Returns a pointer to the internal storage of the buffer.
+  std::vector<uint8_t>* ValuePtr() { return &bytes_; }
+  /// Returns a pointer to the internal storage of the buffer.
+  const std::vector<uint8_t>* ValuePtr() const { return &bytes_; }
+
+  /// Returns a casted pointer to the internal storage of the buffer.
   template <typename T>
   const T* GetValues() const {
-    return reinterpret_cast<const T*>(values_.data());
+    return reinterpret_cast<const T*>(bytes_.data());
   }
 
   /// Copies the buffer values to an other one
@@ -156,67 +193,30 @@ class Buffer {
   /// Succeeds only if both buffer contents are equal
   Result IsEqual(Buffer* buffer) const;
 
- protected:
-  Buffer();
-
-  std::vector<uint8_t> values_;
-  std::unique_ptr<Format> format_;
+  /// Compare the RMSE of this buffer against |buffer|. The RMSE must be
+  /// less than |tolerance|.
+  Result CompareRMSE(Buffer* buffer, float tolerance) const;
 
  private:
+  uint32_t WriteValueFromComponent(const Value& value,
+                                   const Format::Component& comp,
+                                   uint8_t* ptr);
+
+  // Calculates the difference between the value stored in this buffer and
+  // those stored in |buffer| and returns all the values.
+  std::vector<double> CalculateDiffs(const Buffer* buffer) const;
+
   BufferType buffer_type_ = BufferType::kUnknown;
   std::string name_;
+  /// max_size_in_bytes_ is the total size in bytes needed to hold the buffer
+  /// over all ubo, ssbo size and ssbo subdata size calls.
+  uint32_t max_size_in_bytes_ = 0;
   uint32_t element_count_ = 0;
   uint32_t width_ = 0;
   uint32_t height_ = 0;
-  uint8_t location_ = 0;
-};
-
-/// A buffer class where the data is described by a |DatumType| object.
-class DataBuffer : public Buffer {
- public:
-  DataBuffer();
-  explicit DataBuffer(BufferType type);
-  ~DataBuffer() override;
-
-  // Buffer
-  bool IsDataBuffer() const override { return true; }
-  Result SetData(const std::vector<Value>& data) override;
-
-  /// Sets the DatumType of the buffer to |type|.
-  void SetDatumType(const DatumType& type) {
-    datum_type_ = type;
-    format_ = datum_type_.AsFormat();
-  }
-  /// Returns the DatumType describing the buffer data.
-  const DatumType GetDatumType() const { return datum_type_; }
-
- private:
-  Result CopyData(const std::vector<Value>& data);
-
-  DatumType datum_type_;
-};
-
-/// A buffer class where the data is described by a |format| object.
-class FormatBuffer : public Buffer {
- public:
-  FormatBuffer();
-  explicit FormatBuffer(BufferType type);
-  ~FormatBuffer() override;
-
-  // Buffer
-  bool IsFormatBuffer() const override { return true; }
-
-  Result SetData(const std::vector<Value>& data) override;
-
-  uint32_t GetTexelStride() { return format_->SizeInBytes(); }
-
-  // When copying the image to the host buffer, we specify a row length of 0
-  // which results in tight packing of rows.  So the row stride is the product
-  // of the texel stride and the number of texels in a row.
-  uint32_t GetRowStride() { return GetTexelStride() * GetWidth(); }
-
- private:
-  Result CopyData(const std::vector<Value>& data);
+  bool format_is_default_ = false;
+  std::vector<uint8_t> bytes_;
+  std::unique_ptr<Format> format_;
 };
 
 }  // namespace amber

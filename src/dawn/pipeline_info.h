@@ -17,7 +17,10 @@
 
 #include <cstdint>
 #include <memory>
+#include <set>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "amber/result.h"
 #include "dawn/dawncpp.h"
@@ -27,6 +30,16 @@
 namespace amber {
 namespace dawn {
 
+struct hash_pair {
+  template <class T1, class T2>
+  size_t operator()(const std::pair<T1, T2>& p) const {
+    auto hash1 = std::hash<T1>{}(p.first);
+    auto hash2 = std::hash<T2>{}(p.second);
+    return hash1 ^ hash2;
+  }
+};
+
+/// Stores information relating to a graphics pipeline in Dawn.
 struct RenderPipelineInfo {
   RenderPipelineInfo() {}
   RenderPipelineInfo(::amber::Pipeline* the_pipeline,
@@ -42,26 +55,25 @@ struct RenderPipelineInfo {
   float clear_depth_value = 1.0f;
   uint32_t clear_stencil_value = 0;
 
-  // The framebuffer color render target.  This resides on the GPU.
-  ::dawn::Texture fb_texture;
-  // The buffer to which we will copy the rendered pixel values, for
-  // use on the host.
-  ::dawn::Buffer fb_buffer;
-  // The number of bytes between successive texels in framebuffer host-side
-  // buffer.
-  uint32_t fb_texel_stride = 0;
-  // The number of bytes between successive rows of texels in framebuffer
-  // host-side buffer.
-  uint32_t fb_row_stride = 0;
-  // The number of rows in the framebuffer.
-  uint32_t fb_num_rows = 0;
-  // The number of data bytes in the framebuffer host-side buffer.
-  uint32_t fb_size = 0;
+  // Depth-stencil target.  This resides on the GPU.
+  ::dawn::Texture depth_stencil_texture;
+  // Vertex buffers
+  std::vector<::dawn::Buffer> vertex_buffers;
+  // Index buffer
+  ::dawn::Buffer index_buffer;
+  // Storage and uniform buffers
+  std::vector<::dawn::Buffer> buffers;
+  // Binding info
+  std::vector<::dawn::BindGroup> bind_groups;
+  std::vector<::dawn::BindGroupLayout> bind_group_layouts;
 
-  // TODO(dneto): Record index data
-  // TODO(dneto): Record buffer data
+  // Mapping from the <descriptor_set, binding> to dawn buffer index in buffers
+  std::unordered_map<std::pair<uint32_t, uint32_t>, uint32_t, hash_pair>
+      buffer_map;
+  std::set<int> used_descriptor_set;
 };
 
+/// Stores information relating to a compute pipeline in Dawn.
 struct ComputePipelineInfo {
   ComputePipelineInfo() {}
   ComputePipelineInfo(::amber::Pipeline* the_pipeline,
@@ -70,9 +82,20 @@ struct ComputePipelineInfo {
 
   ::amber::Pipeline* pipeline = nullptr;
   ::dawn::ShaderModule compute_shader;
+
+  // storage and uniform buffers
+  std::vector<::dawn::Buffer> buffers;
+
+  std::vector<::dawn::BindGroup> bind_groups;
+  std::vector<::dawn::BindGroupLayout> bind_group_layouts;
+
+  // Mapping from the <descriptor_set, binding> to dawn buffer index in buffers
+  std::unordered_map<std::pair<uint32_t, uint32_t>, uint32_t, hash_pair>
+      buffer_map;
+  std::set<int> used_descriptor_set;
 };
 
-// Holds either a render or compute pipeline.
+/// Holds either a render or compute pipeline.
 struct Pipeline {
   std::unique_ptr<RenderPipelineInfo> render_pipeline;
   std::unique_ptr<ComputePipelineInfo> compute_pipeline;

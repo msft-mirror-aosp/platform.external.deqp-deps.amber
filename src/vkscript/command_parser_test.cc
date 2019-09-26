@@ -980,10 +980,10 @@ TEST_P(CommandParserProbeTest, ProbeNotRect) {
   EXPECT_FLOAT_EQ(4.0f, cmd->GetA());
 }
 
-INSTANTIATE_TEST_CASE_P(ProbeTests,
-                        CommandParserProbeTest,
-                        testing::Values(false,
-                                        true), );  // NOLINT(whitespace/parens)
+INSTANTIATE_TEST_SUITE_P(ProbeTests,
+                         CommandParserProbeTest,
+                         testing::Values(false,
+                                         true));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, ProbeAllRGB) {
   std::string data = "probe all rgb 0.2 0.3 0.4";
@@ -1386,7 +1386,7 @@ TEST_P(CommandDataPipelineTopologyParser, Topology) {
   EXPECT_EQ(test_data.value, cp.PipelineDataForTesting()->GetTopology());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     TopologyTests,
     CommandDataPipelineTopologyParser,
     testing::Values(
@@ -1413,7 +1413,7 @@ INSTANTIATE_TEST_CASE_P(
         TopologyTestData{
             "VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY",
             Topology::
-                kTriangleStripWithAdjacency}), );  // NOLINT(whitespace/parens)
+                kTriangleStripWithAdjacency}));  // NOLINT(whitespace/parens)
 
 struct PipelineDataInvalidTest {
   const char* name;
@@ -1486,7 +1486,7 @@ TEST_P(CommandDataPipelineDataInvalidParser, ExtraPipelineParamValue) {
             r.Error());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     PipelineDataInvalidTests,
     CommandDataPipelineDataInvalidParser,
     testing::Values(
@@ -1495,7 +1495,7 @@ INSTANTIATE_TEST_CASE_P(
         PipelineDataInvalidTest{"cullMode", "VK_CULL_MODE_BACK_BIT"},
         PipelineDataInvalidTest{"frontFace", "VK_FRONT_FACE_COUNTER_CLOCKWISE"},
         PipelineDataInvalidTest{
-            "logicOp", "VK_LOGIC_OP_NO_OP"}), );  // NOLINT(whitespace/parens)
+            "logicOp", "VK_LOGIC_OP_NO_OP"}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, BooleanTrue) {
   struct {
@@ -1819,7 +1819,7 @@ TEST_P(CommandParserBooleanTests, ExtraParam) {
             r.Error());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     BooleanTests,
     CommandParserBooleanTests,
     testing::Values(BooleanTest{"primitiveRestartEnable"},
@@ -1832,7 +1832,7 @@ INSTANTIATE_TEST_CASE_P(
                     BooleanTest{"depthWriteEnable"},
                     BooleanTest{"depthBoundsTestEnable"},
                     BooleanTest{
-                        "stencilTestEnable"}), );  // NOLINT(whitespace/parens)
+                        "stencilTestEnable"}));  // NOLINT(whitespace/parens)
 
 struct PolygonModeTestData {
   const char* name;
@@ -1854,7 +1854,7 @@ TEST_P(CommandDataPipelinePolygonModeParser, PolygonMode) {
   EXPECT_EQ(test_data.value, cp.PipelineDataForTesting()->GetPolygonMode());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     PolygonModeTests,
     CommandDataPipelinePolygonModeParser,
     testing::Values(
@@ -1862,7 +1862,7 @@ INSTANTIATE_TEST_CASE_P(
         PolygonModeTestData{"VK_POLYGON_MODE_LINE", PolygonMode::kLine},
         PolygonModeTestData{
             "VK_POLYGON_MODE_POINT",
-            PolygonMode::kPoint}), );  // NOLINT(whitespace/parens)
+            PolygonMode::kPoint}));  // NOLINT(whitespace/parens)
 
 struct CullModeTestData {
   const char* name;
@@ -1884,7 +1884,7 @@ TEST_P(CommandDataPipelineCullModeParser, CullMode) {
   EXPECT_EQ(test_data.value, cp.PipelineDataForTesting()->GetCullMode());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     CullModeTests,
     CommandDataPipelineCullModeParser,
     testing::Values(
@@ -1897,7 +1897,7 @@ INSTANTIATE_TEST_CASE_P(
                          CullMode::kFrontAndBack},
         CullModeTestData{
             "VK_CULL_MODE_FRONT_AND_BACK",
-            CullMode::kFrontAndBack}), );  // NOLINT(whitespace/parens)
+            CullMode::kFrontAndBack}));  // NOLINT(whitespace/parens)
 
 struct FrontFaceTestData {
   const char* name;
@@ -1919,15 +1919,14 @@ TEST_P(CommandDataPipelineFrontFaceParser, FrontFace) {
   EXPECT_EQ(test_data.value, cp.PipelineDataForTesting()->GetFrontFace());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     FrontFaceTests,
     CommandDataPipelineFrontFaceParser,
-    testing::Values(
-        FrontFaceTestData{"VK_FRONT_FACE_COUNTER_CLOCKWISE",
-                          FrontFace::kCounterClockwise},
-        FrontFaceTestData{
-            "VK_FRONT_FACE_CLOCKWISE",
-            FrontFace::kClockwise}), );  // NOLINT(whitespace/parens)
+    testing::Values(FrontFaceTestData{"VK_FRONT_FACE_COUNTER_CLOCKWISE",
+                                      FrontFace::kCounterClockwise},
+                    FrontFaceTestData{
+                        "VK_FRONT_FACE_CLOCKWISE",
+                        FrontFace::kClockwise}));  // NOLINT(whitespace/parens)
 
 struct LogicOpTestData {
   const char* name;
@@ -1949,7 +1948,7 @@ TEST_P(CommandDataPipelineLogicOpParser, LogicOp) {
   EXPECT_EQ(test_data.value, cp.PipelineDataForTesting()->GetLogicOp());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     LogicOpTests,
     CommandDataPipelineLogicOpParser,
     testing::Values(
@@ -1969,7 +1968,7 @@ INSTANTIATE_TEST_CASE_P(
         LogicOpTestData{"VK_LOGIC_OP_OR_INVERTED", LogicOp::kOrInverted},
         LogicOpTestData{"VK_LOGIC_OP_NAND", LogicOp::kNand},
         LogicOpTestData{"VK_LOGIC_OP_SET",
-                        LogicOp::kSet}), );  // NOLINT(whitespace/parens)
+                        LogicOp::kSet}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, DepthBiasConstantFactor) {
   std::string data = "depthBiasConstantFactor 3.4";
@@ -2085,7 +2084,7 @@ TEST_P(CommandParserFloatTests, ExtraParam) {
             r.Error());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     FloatTests,
     CommandParserFloatTests,
     testing::Values(FloatTest{"depthBiasConstantFactor"},
@@ -2093,8 +2092,7 @@ INSTANTIATE_TEST_CASE_P(
                     FloatTest{"depthBiasClamp"},
                     FloatTest{"depthBiasSlopeFactor"},
                     FloatTest{"minDepthBounds"},
-                    FloatTest{
-                        "maxDepthBounds"}), );  // NOLINT(whitespace/parens)
+                    FloatTest{"maxDepthBounds"}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, SrcColorBlendFactor) {
   std::string data = "srcColorBlendFactor VK_BLEND_FACTOR_DST_COLOR";
@@ -2162,7 +2160,7 @@ TEST_P(CommandParserBlendFactorParsing, Parse) {
   EXPECT_EQ(test_data.type, factor);
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     BlendFactorParsingTests,
     CommandParserBlendFactorParsing,
     testing::Values(
@@ -2196,7 +2194,7 @@ INSTANTIATE_TEST_CASE_P(
         BlendFactorData{"VK_BLEND_FACTOR_SRC1_ALPHA", BlendFactor::kSrc1Alpha},
         BlendFactorData{
             "VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA",
-            BlendFactor::kOneMinusSrc1Alpha}), );  // NOLINT(whitespace/parens)
+            BlendFactor::kOneMinusSrc1Alpha}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, BlendFactorParsingInvalid) {
   Pipeline pipeline(PipelineType::kGraphics);
@@ -2258,15 +2256,14 @@ TEST_P(CommandParserBlendFactorTests, ExtraParam) {
             r.Error());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     BlendFactorTests,
     CommandParserBlendFactorTests,
-    testing::Values(
-        BlendFactorTest{"srcColorBlendFactor"},
-        BlendFactorTest{"dstColorBlendFactor"},
-        BlendFactorTest{"srcAlphaBlendFactor"},
-        BlendFactorTest{
-            "dstAlphaBlendFactor"}), );  // NOLINT(whitespace/parens)
+    testing::Values(BlendFactorTest{"srcColorBlendFactor"},
+                    BlendFactorTest{"dstColorBlendFactor"},
+                    BlendFactorTest{"srcAlphaBlendFactor"},
+                    BlendFactorTest{
+                        "dstAlphaBlendFactor"}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, ColorBlendOp) {
   std::string data = "colorBlendOp VK_BLEND_OP_XOR_EXT";
@@ -2308,7 +2305,7 @@ TEST_P(CommandParserBlendOpParsing, Parse) {
   EXPECT_EQ(test_data.type, op);
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     BlendOpParsingTests1,
     CommandParserBlendOpParsing,
     testing::Values(
@@ -2341,9 +2338,9 @@ INSTANTIATE_TEST_CASE_P(
         BlendOpData{"VK_BLEND_OP_DIFFERENCE_EXT", BlendOp::kDifference},
         BlendOpData{"VK_BLEND_OP_EXCLUSION_EXT", BlendOp::kExclusion},
         BlendOpData{"VK_BLEND_OP_INVERT_EXT",
-                    BlendOp::kInvert}), );  // NOLINT(whitespace/parens)
+                    BlendOp::kInvert}));  // NOLINT(whitespace/parens)
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     BlendOpParsingTests2,
     CommandParserBlendOpParsing,
     testing::Values(
@@ -2370,7 +2367,7 @@ INSTANTIATE_TEST_CASE_P(
         BlendOpData{"VK_BLEND_OP_RED_EXT", BlendOp::kRed},
         BlendOpData{"VK_BLEND_OP_GREEN_EXT", BlendOp::kGreen},
         BlendOpData{"VK_BLEND_OP_BLUE_EXT",
-                    BlendOp::kBlue}), );  // NOLINT(whitespace/parens)
+                    BlendOp::kBlue}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, BlendOpParsingInvalid) {
   Pipeline pipeline(PipelineType::kGraphics);
@@ -2432,12 +2429,11 @@ TEST_P(CommandParserBlendOpTests, ExtraParam) {
             r.Error());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     BlendOpTests,
     CommandParserBlendOpTests,
     testing::Values(BlendOpTest{"colorBlendOp"},
-                    BlendOpTest{
-                        "alphaBlendOp"}), );  // NOLINT(whitespace/parens)
+                    BlendOpTest{"alphaBlendOp"}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, DepthCompareOp) {
   std::string data = "depthCompareOp VK_COMPARE_OP_EQUAL";
@@ -2492,7 +2488,7 @@ TEST_P(CommandParserCompareOpParsing, Parse) {
   EXPECT_EQ(test_data.type, op);
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     CompareOpParsingTests,
     CommandParserCompareOpParsing,
     testing::Values(
@@ -2505,7 +2501,7 @@ INSTANTIATE_TEST_CASE_P(
         CompareOpData{"VK_COMPARE_OP_GREATER_OR_EQUAL",
                       CompareOp::kGreaterOrEqual},
         CompareOpData{"VK_COMPARE_OP_ALWAYS",
-                      CompareOp::kAlways}), );  // NOLINT(whitespace/parens)
+                      CompareOp::kAlways}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, CompareOpParsingInvalid) {
   Pipeline pipeline(PipelineType::kGraphics);
@@ -2568,13 +2564,13 @@ TEST_P(CommandParserCompareOpTests, ExtraParam) {
             r.Error());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     CompareOpTests,
     CommandParserCompareOpTests,
     testing::Values(CompareOpTest{"depthCompareOp"},
                     CompareOpTest{"front.compareOp"},
                     CompareOpTest{
-                        "back.compareOp"}), );  // NOLINT(whitespace/parens)
+                        "back.compareOp"}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, FrontFailOp) {
   std::string data = "front.failOp VK_STENCIL_OP_REPLACE";
@@ -2662,7 +2658,7 @@ TEST_P(CommandParserStencilOpParsing, Parse) {
   EXPECT_EQ(test_data.type, op);
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     CompareOpParsingTests,
     CommandParserStencilOpParsing,
     testing::Values(
@@ -2678,7 +2674,7 @@ INSTANTIATE_TEST_CASE_P(
                       StencilOp::kIncrementAndWrap},
         StencilOpData{
             "VK_STENCIL_OP_DECREMENT_AND_WRAP",
-            StencilOp::kDecrementAndWrap}), );  // NOLINT(whitespace/parens)
+            StencilOp::kDecrementAndWrap}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, StencilOpParsingInvalid) {
   Pipeline pipeline(PipelineType::kGraphics);
@@ -2741,7 +2737,7 @@ TEST_P(CommandParserStencilOpTests, ExtraParam) {
             r.Error());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     StencilOpTests,
     CommandParserStencilOpTests,
     testing::Values(StencilOpTest{"front.passOp"},
@@ -2750,7 +2746,7 @@ INSTANTIATE_TEST_CASE_P(
                     StencilOpTest{"back.passOp"},
                     StencilOpTest{"back.failOp"},
                     StencilOpTest{
-                        "back.depthFailOp"}), );  // NOLINT(whitespace/parens)
+                        "back.depthFailOp"}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, FrontCompareMask) {
   std::string data = "front.compareMask 123";
@@ -2866,12 +2862,12 @@ TEST_P(CommandParserReferenceTests, FrontReferenceInvalidParameters) {
             r.Error());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     ReferenceTest,
     CommandParserReferenceTests,
     testing::Values(ReferenceData{"front.reference"},
                     ReferenceData{
-                        "back.reference"}), );  // NOLINT(whitespace/parens)
+                        "back.reference"}));  // NOLINT(whitespace/parens)
 
 struct ColorMaskData {
   const char* input;
@@ -2891,7 +2887,7 @@ TEST_P(CommandParserColorMaskTests, ColorWriteMask) {
   EXPECT_EQ(test_data.result, cp.PipelineDataForTesting()->GetColorWriteMask());
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     ColorMaskTests,
     CommandParserColorMaskTests,
     testing::Values(
@@ -2905,7 +2901,7 @@ INSTANTIATE_TEST_CASE_P(
         ColorMaskData{"VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_B_BIT | "
                       "VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT",
                       kColorMaskR | kColorMaskG | kColorMaskB |
-                          kColorMaskA}), );  // NOLINT(whitespace/parens)
+                          kColorMaskA}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, ColorWriteMaskInvalid) {
   std::string data = "colorWriteMask INVALID";
@@ -2973,7 +2969,7 @@ TEST_F(CommandParserTest, SSBO) {
   EXPECT_TRUE(cmd->IsSSBO());
   EXPECT_EQ(static_cast<uint32_t>(0), cmd->GetDescriptorSet());
   EXPECT_EQ(5U, cmd->GetBinding());
-  EXPECT_EQ(40U, cmd->GetSize());
+  EXPECT_EQ(40U, cmd->GetBuffer()->ElementCount());
 }
 
 TEST_F(CommandParserTest, SSBOWithDescriptorSet) {
@@ -2993,7 +2989,7 @@ TEST_F(CommandParserTest, SSBOWithDescriptorSet) {
   EXPECT_TRUE(cmd->IsSSBO());
   EXPECT_EQ(9U, cmd->GetDescriptorSet());
   EXPECT_EQ(5U, cmd->GetBinding());
-  EXPECT_EQ(40U, cmd->GetSize());
+  EXPECT_EQ(40U, cmd->GetBuffer()->ElementCount());
 }
 
 TEST_F(CommandParserTest, SSBOExtraParameter) {
@@ -3091,7 +3087,6 @@ TEST_F(CommandParserTest, SSBOSubdataWithFloat) {
   EXPECT_EQ(static_cast<uint32_t>(0), cmd->GetDescriptorSet());
   EXPECT_EQ(6U, cmd->GetBinding());
   EXPECT_EQ(16U, cmd->GetOffset());
-  EXPECT_EQ(16U, cmd->GetSize());
   ASSERT_TRUE(cmd->IsSubdata());
 
   auto* fmt = cmd->GetBuffer()->GetFormat();
@@ -3137,7 +3132,6 @@ TEST_F(CommandParserTest, SSBOSubdataWithDescriptorSet) {
   EXPECT_EQ(5U, cmd->GetDescriptorSet());
   EXPECT_EQ(6U, cmd->GetBinding());
   EXPECT_EQ(16U, cmd->GetOffset());
-  EXPECT_EQ(16U, cmd->GetSize());
 
   auto* fmt = cmd->GetBuffer()->GetFormat();
   EXPECT_TRUE(fmt->IsFloat());
@@ -3171,7 +3165,6 @@ TEST_F(CommandParserTest, SSBOSubdataWithInts) {
   EXPECT_EQ(static_cast<uint32_t>(0), cmd->GetDescriptorSet());
   EXPECT_EQ(6U, cmd->GetBinding());
   EXPECT_EQ(8U, cmd->GetOffset());
-  EXPECT_EQ(8U, cmd->GetSize());
 
   auto* fmt = cmd->GetBuffer()->GetFormat();
   EXPECT_TRUE(fmt->IsInt16());
@@ -3205,7 +3198,6 @@ TEST_F(CommandParserTest, SSBOSubdataWithMultipleVectors) {
   EXPECT_EQ(static_cast<uint32_t>(0), cmd->GetDescriptorSet());
   EXPECT_EQ(6U, cmd->GetBinding());
   EXPECT_EQ(8U, cmd->GetOffset());
-  EXPECT_EQ(16U, cmd->GetSize());
 
   auto* fmt = cmd->GetBuffer()->GetFormat();
   EXPECT_TRUE(fmt->IsInt16());
@@ -3338,18 +3330,18 @@ TEST_F(CommandParserTest, Uniform) {
   auto* cmd = cmds[0]->AsBuffer();
   EXPECT_TRUE(cmd->IsPushConstant());
   EXPECT_EQ(32U, cmd->GetOffset());
-  EXPECT_EQ(16U, cmd->GetSize());
 
   auto* fmt = cmd->GetBuffer()->GetFormat();
   EXPECT_TRUE(fmt->IsFloat());
   EXPECT_EQ(1U, fmt->ColumnCount());
   EXPECT_EQ(3U, fmt->RowCount());
 
-  const auto& values = cmd->GetValues();
-  std::vector<float> results = {2.1f, 3.2f, 4.3f};
-  ASSERT_EQ(results.size(), values.size());
+  const auto* buf = cmd->GetBuffer();
+  const auto* values = buf->GetValues<float>();
+  std::vector<float> results = {2.1f, 3.2f, 4.3f, 0.f};
+  ASSERT_EQ(results.size(), buf->ValueCount());
   for (size_t i = 0; i < results.size(); ++i) {
-    EXPECT_FLOAT_EQ(results[i], values[i].AsFloat());
+    EXPECT_FLOAT_EQ(results[i], values[i]);
   }
 }
 
@@ -3380,18 +3372,18 @@ TEST_F(CommandParserTest, UniformWithContinuation) {
   auto* cmd = cmds[0]->AsBuffer();
   EXPECT_TRUE(cmd->IsPushConstant());
   EXPECT_EQ(16U, cmd->GetOffset());
-  EXPECT_EQ(32U, cmd->GetSize());
 
   auto* fmt = cmd->GetBuffer()->GetFormat();
   EXPECT_TRUE(fmt->IsFloat());
   EXPECT_EQ(1U, fmt->ColumnCount());
   EXPECT_EQ(3U, fmt->RowCount());
 
-  const auto& values = cmd->GetValues();
-  std::vector<float> results = {2.1f, 3.2f, 4.3f, 5.4f, 6.7f, 8.9f};
-  ASSERT_EQ(results.size(), values.size());
+  const auto* buf = cmd->GetBuffer();
+  const auto* values = buf->GetValues<float>();
+  std::vector<float> results = {2.1f, 3.2f, 4.3f, 0.f, 5.4f, 6.7f, 8.9f, 0.f};
+  ASSERT_EQ(results.size(), buf->ValueCount());
   for (size_t i = 0; i < results.size(); ++i) {
-    EXPECT_FLOAT_EQ(results[i], values[i].AsFloat());
+    EXPECT_FLOAT_EQ(results[i], values[i]);
   }
 }
 
@@ -3429,7 +3421,7 @@ TEST_F(CommandParserTest, UniformInvalidStringOffset) {
 }
 
 TEST_F(CommandParserTest, UniformMissingValues) {
-  std::string data = "uniform vec3 2 2.1 3.2 4.3 5.5";
+  std::string data = "uniform vec3 0 2.1 3.2 4.3 5.5";
 
   Pipeline pipeline(PipelineType::kGraphics);
   Script script;
@@ -3458,7 +3450,6 @@ TEST_F(CommandParserTest, UniformUBO) {
   EXPECT_EQ(static_cast<uint32_t>(0), cmd->GetDescriptorSet());
   EXPECT_EQ(2U, cmd->GetBinding());
   EXPECT_EQ(static_cast<uint32_t>(0), cmd->GetOffset());
-  EXPECT_EQ(16U, cmd->GetSize());
 
   auto* fmt = cmd->GetBuffer()->GetFormat();
   EXPECT_TRUE(fmt->IsFloat());
@@ -3471,6 +3462,18 @@ TEST_F(CommandParserTest, UniformUBO) {
   for (size_t i = 0; i < results.size(); ++i) {
     EXPECT_FLOAT_EQ(results[i], values[i].AsFloat());
   }
+}
+
+TEST_F(CommandParserTest, UniformUBODisallowUpdatingInMiddleOfElement) {
+  std::string data = "uniform ubo 2 vec3 4 2.1 3.2 4.3";
+
+  Pipeline pipeline(PipelineType::kGraphics);
+  Script script;
+  CommandParser cp(&script, &pipeline, 1, data);
+  Result r = cp.Parse();
+  ASSERT_FALSE(r.IsSuccess());
+
+  EXPECT_EQ("1: offset for uniform must be multiple of data size", r.Error());
 }
 
 TEST_F(CommandParserTest, UniformUBOOffsetMustBePositive) {
@@ -3502,7 +3505,6 @@ TEST_F(CommandParserTest, UniformUBOWithDescriptorSet) {
   EXPECT_EQ(3U, cmd->GetDescriptorSet());
   EXPECT_EQ(2U, cmd->GetBinding());
   EXPECT_EQ(16U, cmd->GetOffset());
-  EXPECT_EQ(16U, cmd->GetSize());
 
   auto* fmt = cmd->GetBuffer()->GetFormat();
   EXPECT_TRUE(fmt->IsFloat());
@@ -3574,7 +3576,7 @@ TEST_F(CommandParserTest, UniformUBOInvalidStringOffset) {
 }
 
 TEST_F(CommandParserTest, UniformUBOMissingValues) {
-  std::string data = "uniform ubo 0 vec3 2 2.1 3.2 4.3 5.5";
+  std::string data = "uniform ubo 0 vec3 0 2.1 3.2 4.3 5.5";
 
   Pipeline pipeline(PipelineType::kGraphics);
   Script script;
@@ -4190,7 +4192,7 @@ TEST_P(CommandParserComparatorTests, Comparator) {
   EXPECT_EQ(test_data.op, result);
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     ComparatorTests,
     CommandParserComparatorTests,
     testing::Values(
@@ -4202,7 +4204,7 @@ INSTANTIATE_TEST_CASE_P(
         ComparatorTest{">", ProbeSSBOCommand::Comparator::kGreater},
         ComparatorTest{">=",
                        ProbeSSBOCommand::Comparator::
-                           kGreaterOrEqual}), );  // NOLINT(whitespace/parens)
+                           kGreaterOrEqual}));  // NOLINT(whitespace/parens)
 
 TEST_F(CommandParserTest, ComparatorInvalid) {
   Pipeline pipeline(PipelineType::kGraphics);

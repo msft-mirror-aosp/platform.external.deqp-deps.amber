@@ -43,8 +43,8 @@ Result GetFrameBuffer(Buffer* buffer, std::vector<Value>* values) {
   if (!cpu_memory)
     return Result("GetFrameBuffer missing memory pointer");
 
-  const auto texel_stride = buffer->AsFormatBuffer()->GetTexelStride();
-  const auto row_stride = buffer->AsFormatBuffer()->GetRowStride();
+  const auto texel_stride = buffer->GetTexelStride();
+  const auto row_stride = buffer->GetRowStride();
 
   for (uint32_t y = 0; y < buffer->GetHeight(); ++y) {
     for (uint32_t x = 0; x < buffer->GetWidth(); ++x) {
@@ -67,12 +67,13 @@ EngineConfig::~EngineConfig() = default;
 Options::Options()
     : engine(amber::EngineType::kEngineTypeVulkan),
       config(nullptr),
-      pipeline_create_only(false),
+      execution_type(ExecutionType::kExecute),
+      disable_spirv_validation(false),
       delegate(nullptr) {}
 
 Options::~Options() = default;
 
-BufferInfo::BufferInfo() : width(0), height(0) {}
+BufferInfo::BufferInfo() : is_image_buffer(false), width(0), height(0) {}
 
 BufferInfo::BufferInfo(const BufferInfo&) = default;
 
@@ -168,10 +169,8 @@ amber::Result Amber::ExecuteWithShaderData(const amber::Recipe* recipe,
   script->SetSpvTargetEnv(opts->spv_env);
 
   Executor executor;
-  Result executor_result = executor.Execute(
-      engine.get(), script, shader_data,
-      opts->pipeline_create_only ? ExecutionType::kPipelineCreateOnly
-                                 : ExecutionType::kExecute);
+  Result executor_result =
+      executor.Execute(engine.get(), script, shader_data, opts);
   // Hold the executor result until the extractions are complete. This will let
   // us dump any buffers requested even on failure.
 
@@ -189,7 +188,7 @@ amber::Result Amber::ExecuteWithShaderData(const amber::Recipe* recipe,
   // extractor fails before running the pipeline that will trigger the dumps
   // to almost always fail.
   for (BufferInfo& buffer_info : opts->extractions) {
-    if (buffer_info.buffer_name == Pipeline::kGeneratedColorBuffer) {
+    if (buffer_info.is_image_buffer) {
       auto* buffer = script->GetBuffer(buffer_info.buffer_name);
       if (!buffer)
         break;

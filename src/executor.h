@@ -15,14 +15,13 @@
 #ifndef SRC_EXECUTOR_H_
 #define SRC_EXECUTOR_H_
 
+#include "amber/amber.h"
 #include "amber/result.h"
 #include "src/engine.h"
 #include "src/script.h"
 #include "src/verifier.h"
 
 namespace amber {
-
-enum class ExecutionType { kExecute = 0, kPipelineCreateOnly };
 
 /// The executor is responsible for running the given script against an engine.
 class Executor {
@@ -37,10 +36,12 @@ class Executor {
   Result Execute(Engine* engine,
                  const Script* script,
                  const ShaderMap& map,
-                 ExecutionType executionType);
+                 Options* options);
 
  private:
-  Result CompileShaders(const Script* script, const ShaderMap& shader_map);
+  Result CompileShaders(const Script* script,
+                        const ShaderMap& shader_map,
+                        Options* options);
   Result ExecuteCommand(Engine* engine, Command* cmd);
 
   Verifier verifier_;
