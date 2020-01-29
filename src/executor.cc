@@ -100,7 +100,7 @@ Result Executor::ExecuteCommand(Engine* engine, Command* cmd) {
     assert(buffer);
 
     Format* fmt = buffer->GetFormat();
-    return verifier_.Probe(cmd->AsProbe(), fmt, buffer->GetTexelStride(),
+    return verifier_.Probe(cmd->AsProbe(), fmt, buffer->GetElementStride(),
                            buffer->GetRowStride(), buffer->GetWidth(),
                            buffer->GetHeight(), buffer->ValuePtr()->data());
   }
@@ -128,6 +128,8 @@ Result Executor::ExecuteCommand(Engine* engine, Command* cmd) {
     switch (compare->GetComparator()) {
       case CompareBufferCommand::Comparator::kRmse:
         return buffer_1->CompareRMSE(buffer_2, compare->GetTolerance());
+      case CompareBufferCommand::Comparator::kHistogramEmd:
+        return buffer_1->CompareHistogramEMD(buffer_2, compare->GetTolerance());
       case CompareBufferCommand::Comparator::kEq:
         return buffer_1->IsEqual(buffer_2);
     }
