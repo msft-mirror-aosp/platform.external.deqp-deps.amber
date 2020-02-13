@@ -24,6 +24,7 @@
 #include "src/command_data.h"
 #include "src/make_unique.h"
 #include "src/tokenizer.h"
+#include "src/type_parser.h"
 #include "src/vkscript/datum_type_parser.h"
 
 namespace amber {
@@ -490,7 +491,7 @@ Result CommandParser::ParseValues(const std::string& name,
   while (!token->IsEOL() && !token->IsEOS()) {
     Value v;
 
-    if ((fmt->IsFloat() || fmt->IsDouble())) {
+    if ((fmt->IsFloat32() || fmt->IsFloat64())) {
       if (!token->IsInteger() && !token->IsDouble()) {
         return Result(std::string("Invalid value provided to ") + name +
                       " command: " + token->ToOriginalString());
@@ -519,7 +520,7 @@ Result CommandParser::ParseValues(const std::string& name,
 
   // This could overflow, but I don't really expect us to get command files
   // that big ....
-  size_t num_per_row = fmt->RowCount();
+  size_t num_per_row = fmt->GetType()->RowCount();
   if (seen == 0 || (seen % num_per_row) != 0) {
     return Result(std::string("Incorrect number of values provided to ") +
                   name + " command");
@@ -588,16 +589,19 @@ Result CommandParser::ProcessSSBO() {
                     token->ToOriginalString());
 
     DatumTypeParser tp;
-    Result r = tp.Parse(token->AsString());
-    if (!r.IsSuccess())
-      return r;
+    auto type = tp.Parse(token->AsString());
+    if (!type)
+      return Result("Invalid type provided: " + token->AsString());
 
-    auto fmt = tp.GetType().AsFormat();
+    auto fmt = MakeUnique<Format>(type.get());
     auto* buf = cmd->GetBuffer();
-    if (buf->FormatIsDefault() || !buf->GetFormat())
-      buf->SetFormat(std::move(fmt));
-    else if (!buf->GetFormat()->Equal(fmt.get()))
+    if (buf->FormatIsDefault() || !buf->GetFormat()) {
+      buf->SetFormat(fmt.get());
+      script_->RegisterFormat(std::move(fmt));
+      script_->RegisterType(std::move(type));
+    } else if (!buf->GetFormat()->Equal(fmt.get())) {
       return Result("probe ssbo format does not match buffer format");
+    }
 
     token = tokenizer_->NextToken();
     if (!token->IsInteger()) {
@@ -617,7 +621,7 @@ Result CommandParser::ProcessSSBO() {
     cmd->SetOffset(token->AsUint32());
 
     std::vector<Value> values;
-    r = ParseValues("ssbo", buf->GetFormat(), &values);
+    Result r = ParseValues("ssbo", buf->GetFormat(), &values);
     if (!r.IsSuccess())
       return r;
 
@@ -639,10 +643,13 @@ Result CommandParser::ProcessSSBO() {
 
     // Set a default format into the buffer if needed.
     if (!buf->GetFormat()) {
-      auto fmt = MakeUnique<Format>();
-      fmt->SetFormatType(FormatType::kR8_SINT);
-      fmt->AddComponent(FormatComponentType::kR, FormatMode::kSInt, 8);
-      buf->SetFormat(std::move(fmt));
+      TypeParser parser;
+      auto type = parser.Parse("R8_SINT");
+      auto fmt = MakeUnique<Format>(type.get());
+      buf->SetFormat(fmt.get());
+      script_->RegisterFormat(std::move(fmt));
+      script_->RegisterType(std::move(type));
+
       // This has to come after the SetFormat() call because SetFormat() resets
       // the value back to false.
       buf->SetFormatIsDefault(true);
@@ -738,21 +745,24 @@ Result CommandParser::ProcessUniform() {
   }
 
   DatumTypeParser tp;
-  Result r = tp.Parse(token->AsString());
-  if (!r.IsSuccess())
-    return r;
+  auto type = tp.Parse(token->AsString());
+  if (!type)
+    return Result("Invalid type provided: " + token->AsString());
 
-  auto fmt = tp.GetType().AsFormat();
+  auto fmt = MakeUnique<Format>(type.get());
 
   // uniform is always std140.
   if (is_ubo)
-    fmt->SetIsStd140();
+    fmt->SetLayout(Format::Layout::kStd140);
 
   auto* buf = cmd->GetBuffer();
-  if (buf->FormatIsDefault() || !buf->GetFormat())
-    buf->SetFormat(std::move(fmt));
-  else if (!buf->GetFormat()->Equal(fmt.get()))
+  if (buf->FormatIsDefault() || !buf->GetFormat()) {
+    buf->SetFormat(fmt.get());
+    script_->RegisterFormat(std::move(fmt));
+    script_->RegisterType(std::move(type));
+  } else if (!buf->GetFormat()->Equal(fmt.get())) {
     return Result("probe ssbo format does not match buffer format");
+  }
 
   token = tokenizer_->NextToken();
   if (!token->IsInteger()) {
@@ -771,7 +781,7 @@ Result CommandParser::ProcessUniform() {
   cmd->SetOffset(token->AsUint32());
 
   std::vector<Value> values;
-  r = ParseValues("uniform", buf->GetFormat(), &values);
+  Result r = ParseValues("uniform", buf->GetFormat(), &values);
   if (!r.IsSuccess())
     return r;
 
@@ -2016,9 +2026,9 @@ Result CommandParser::ProcessProbeSSBO() {
                   token->ToOriginalString());
 
   DatumTypeParser tp;
-  Result r = tp.Parse(token->AsString());
-  if (!r.IsSuccess())
-    return r;
+  auto type = tp.Parse(token->AsString());
+  if (!type)
+    return Result("Invalid type provided: " + token->AsString());
 
   token = tokenizer_->NextToken();
   if (!token->IsInteger())
@@ -2059,18 +2069,22 @@ Result CommandParser::ProcessProbeSSBO() {
                   std::to_string(binding));
   }
 
-  auto fmt = tp.GetType().AsFormat();
-  if (buffer->FormatIsDefault() || !buffer->GetFormat())
-    buffer->SetFormat(tp.GetType().AsFormat());
-  else if (buffer->GetFormat() && !buffer->GetFormat()->Equal(fmt.get()))
+  auto fmt = MakeUnique<Format>(type.get());
+  if (buffer->FormatIsDefault() || !buffer->GetFormat()) {
+    buffer->SetFormat(fmt.get());
+  } else if (buffer->GetFormat() && !buffer->GetFormat()->Equal(fmt.get())) {
     return Result("probe format does not match buffer format");
+  }
 
   auto cmd = MakeUnique<ProbeSSBOCommand>(buffer);
   cmd->SetLine(cur_line);
   cmd->SetTolerances(current_tolerances_);
-  cmd->SetFormat(std::move(fmt));
+  cmd->SetFormat(fmt.get());
   cmd->SetDescriptorSet(set);
   cmd->SetBinding(binding);
+
+  script_->RegisterFormat(std::move(fmt));
+  script_->RegisterType(std::move(type));
 
   if (!token->IsInteger())
     return Result("Invalid offset for probe ssbo command: " +
@@ -2084,7 +2098,7 @@ Result CommandParser::ProcessProbeSSBO() {
                   token->ToOriginalString());
 
   ProbeSSBOCommand::Comparator comp = ProbeSSBOCommand::Comparator::kEqual;
-  r = ParseComparator(token->AsString(), &comp);
+  Result r = ParseComparator(token->AsString(), &comp);
   if (!r.IsSuccess())
     return r;
 

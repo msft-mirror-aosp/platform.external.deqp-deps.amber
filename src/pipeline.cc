@@ -18,8 +18,8 @@
 #include <limits>
 #include <set>
 
-#include "src/format_parser.h"
 #include "src/make_unique.h"
+#include "src/type_parser.h"
 
 namespace amber {
 namespace {
@@ -54,6 +54,7 @@ std::unique_ptr<Pipeline> Pipeline::Clone() const {
   clone->fb_width_ = fb_width_;
   clone->fb_height_ = fb_height_;
   clone->set_arg_values_ = set_arg_values_;
+
   if (!opencl_pod_buffers_.empty()) {
     // Generate specific buffers for the clone.
     clone->GenerateOpenCLPodBuffers();
@@ -309,21 +310,31 @@ Result Pipeline::SetPushConstantBuffer(Buffer* buf) {
   return {};
 }
 
-std::unique_ptr<Buffer> Pipeline::GenerateDefaultColorAttachmentBuffer() const {
-  FormatParser fp;
+std::unique_ptr<Buffer> Pipeline::GenerateDefaultColorAttachmentBuffer() {
+  TypeParser parser;
+  auto type = parser.Parse(kDefaultColorBufferFormat);
+  auto fmt = MakeUnique<Format>(type.get());
 
   std::unique_ptr<Buffer> buf = MakeUnique<Buffer>(BufferType::kColor);
   buf->SetName(kGeneratedColorBuffer);
-  buf->SetFormat(fp.Parse(kDefaultColorBufferFormat));
+  buf->SetFormat(fmt.get());
+
+  formats_.push_back(std::move(fmt));
+  types_.push_back(std::move(type));
   return buf;
 }
 
-std::unique_ptr<Buffer> Pipeline::GenerateDefaultDepthAttachmentBuffer() const {
-  FormatParser fp;
+std::unique_ptr<Buffer> Pipeline::GenerateDefaultDepthAttachmentBuffer() {
+  TypeParser parser;
+  auto type = parser.Parse(kDefaultDepthBufferFormat);
+  auto fmt = MakeUnique<Format>(type.get());
 
   std::unique_ptr<Buffer> buf = MakeUnique<Buffer>(BufferType::kDepth);
   buf->SetName(kGeneratedDepthBuffer);
-  buf->SetFormat(fp.Parse(kDefaultDepthBufferFormat));
+  buf->SetFormat(fmt.get());
+
+  formats_.push_back(std::move(fmt));
+  types_.push_back(std::move(type));
   return buf;
 }
 
@@ -538,11 +549,16 @@ Result Pipeline::GenerateOpenCLPodBuffers() {
           kind == Pipeline::ShaderInfo::DescriptorMapEntry::Kind::POD
               ? BufferType::kStorage
               : BufferType::kUniform);
+
       // Use an 8-bit type because all the data in the descriptor map is
       // byte-based and it simplifies the logic for sizing below.
-      DatumType char_type;
-      char_type.SetType(DataType::kUint8);
-      buffer->SetFormat(char_type.AsFormat());
+      TypeParser parser;
+      auto type = parser.Parse("R8_UINT");
+      auto fmt = MakeUnique<Format>(type.get());
+      buffer->SetFormat(fmt.get());
+      formats_.push_back(std::move(fmt));
+      types_.push_back(std::move(type));
+
       buffer->SetName(GetName() + "_pod_buffer_" +
                       std::to_string(descriptor_set) + "_" +
                       std::to_string(binding));
@@ -556,10 +572,11 @@ Result Pipeline::GenerateOpenCLPodBuffers() {
 
     // Resize if necessary.
     if (buffer->ValueCount() < offset + arg_size) {
-      buffer->ResizeTo(offset + arg_size);
+      buffer->SetSizeInElements(offset + arg_size);
     }
+
     // Check the data size.
-    if (arg_size != arg_info.type.SizeInBytes()) {
+    if (arg_size != arg_info.fmt->SizeInBytes()) {
       std::string message = "SET command uses incorrect data size: kernel " +
                             shader_info.GetEntryPoint();
       if (uses_name) {
@@ -569,7 +586,10 @@ Result Pipeline::GenerateOpenCLPodBuffers() {
       }
       return Result(message);
     }
-    buffer->SetDataWithOffset({arg_info.value}, offset);
+
+    Result r = buffer->SetDataWithOffset({arg_info.value}, offset);
+    if (!r.IsSuccess())
+      return r;
   }
 
   return {};

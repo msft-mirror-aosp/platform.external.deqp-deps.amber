@@ -44,10 +44,10 @@ class Parser : public amber::Parser {
   Result ToShaderType(const std::string& str, ShaderType* type);
   Result ToBufferType(const std::string& str, BufferType* type);
   Result ToShaderFormat(const std::string& str, ShaderFormat* fmt);
-  Result ToDatumType(const std::string& str, DatumType* type);
   Result ToPipelineType(const std::string& str, PipelineType* type);
   Result ValidateEndOfStatement(const std::string& name);
 
+  Result ParseStruct();
   Result ParseBuffer();
   Result ParseBufferInitializer(Buffer*);
   Result ParseBufferInitializerSize(Buffer*);
