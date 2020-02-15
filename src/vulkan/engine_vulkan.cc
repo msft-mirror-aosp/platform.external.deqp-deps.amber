@@ -20,6 +20,7 @@
 
 #include "amber/amber_vulkan.h"
 #include "src/make_unique.h"
+#include "src/type_parser.h"
 #include "src/vulkan/compute_pipeline.h"
 #include "src/vulkan/graphics_pipeline.h"
 
@@ -154,12 +155,12 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
       return Result("Vulkan color attachment format is not supported");
   }
 
-  Format depth_fmt;
+  Format* depth_fmt = nullptr;
   if (pipeline->GetDepthBuffer().buffer) {
     const auto& depth_info = pipeline->GetDepthBuffer();
 
-    depth_fmt = *depth_info.buffer->GetFormat();
-    if (!device_->IsFormatSupportedByPhysicalDevice(depth_fmt,
+    depth_fmt = depth_info.buffer->GetFormat();
+    if (!device_->IsFormatSupportedByPhysicalDevice(*depth_fmt,
                                                     depth_info.buffer)) {
       return Result("Vulkan depth attachment format is not supported");
     }
@@ -407,13 +408,12 @@ Result EngineVulkan::DoDrawRect(const DrawRectCommand* command) {
   // Since draw rect command contains its vertex information and it
   // does not include a format of vertex buffer, we can choose any
   // one that is suitable. We use VK_FORMAT_R32G32_SFLOAT for it.
-  auto format = MakeUnique<Format>();
-  format->SetFormatType(FormatType::kR32G32_SFLOAT);
-  format->AddComponent(FormatComponentType::kR, FormatMode::kSFloat, 32);
-  format->AddComponent(FormatComponentType::kG, FormatMode::kSFloat, 32);
+  TypeParser parser;
+  auto type = parser.Parse("R32G32_SFLOAT");
+  Format fmt(type.get());
 
   auto buf = MakeUnique<Buffer>();
-  buf->SetFormat(std::move(format));
+  buf->SetFormat(&fmt);
   buf->SetData(std::move(values));
 
   auto vertex_buffer = MakeUnique<VertexBuffer>(device_.get());

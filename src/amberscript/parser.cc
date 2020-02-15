@@ -16,14 +16,15 @@
 
 #include <cassert>
 #include <limits>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "src/format_parser.h"
 #include "src/make_unique.h"
 #include "src/shader_data.h"
 #include "src/tokenizer.h"
+#include "src/type_parser.h"
 
 namespace amber {
 namespace amberscript {
@@ -48,6 +49,77 @@ ProbeSSBOCommand::Comparator ToComparator(const std::string& in) {
 
   assert(in == "LE");
   return ProbeSSBOCommand::Comparator::kLessOrEqual;
+}
+
+std::unique_ptr<type::Type> ToType(const std::string& str) {
+  TypeParser parser;
+  if (str == "int8")
+    return parser.Parse("R8_SINT");
+  if (str == "int16")
+    return parser.Parse("R16_SINT");
+  if (str == "int32")
+    return parser.Parse("R32_SINT");
+  if (str == "int64")
+    return parser.Parse("R64_SINT");
+  if (str == "uint8")
+    return parser.Parse("R8_UINT");
+  if (str == "uint16")
+    return parser.Parse("R16_UINT");
+  if (str == "uint32")
+    return parser.Parse("R32_UINT");
+  if (str == "uint64")
+    return parser.Parse("R64_UINT");
+  if (str == "float")
+    return parser.Parse("R32_SFLOAT");
+  if (str == "double")
+    return parser.Parse("R64_SFLOAT");
+
+  if (str.length() > 7 && str.substr(0, 3) == "vec") {
+    if (str[4] != '<' || str[str.length() - 1] != '>')
+      return nullptr;
+
+    int component_count = str[3] - '0';
+    if (component_count < 2 || component_count > 4)
+      return nullptr;
+
+    auto type = ToType(str.substr(5, str.length() - 6));
+    if (!type)
+      return nullptr;
+
+    if (!type->IsNumber() || type->IsArray() || type->IsVec() ||
+        type->IsMatrix()) {
+      return nullptr;
+    }
+
+    type->SetRowCount(static_cast<uint32_t>(component_count));
+    return type;
+  }
+
+  if (str.length() > 9 && str.substr(0, 3) == "mat") {
+    if (str[4] != 'x' || str[6] != '<' || str[str.length() - 1] != '>')
+      return nullptr;
+
+    int column_count = str[3] - '0';
+    if (column_count < 2 || column_count > 4)
+      return nullptr;
+
+    int row_count = str[5] - '0';
+    if (row_count < 2 || row_count > 4)
+      return nullptr;
+
+    auto type = ToType(str.substr(7, str.length() - 8));
+    if (!type)
+      return nullptr;
+    if (!type->IsNumber() || type->IsArray() || type->IsVec() ||
+        type->IsMatrix()) {
+      return nullptr;
+    }
+
+    type->SetRowCount(static_cast<uint32_t>(row_count));
+    type->SetColumnCount(static_cast<uint32_t>(column_count));
+    return type;
+  }
+  return nullptr;
 }
 
 }  // namespace
@@ -92,6 +164,8 @@ Result Parser::Parse(const std::string& data) {
       r = ParseSet();
     } else if (tok == "SHADER") {
       r = ParseShaderBlock();
+    } else if (tok == "STRUCT") {
+      r = ParseStruct();
     } else {
       r = Result("unknown token: " + tok);
     }
@@ -108,10 +182,10 @@ Result Parser::Parse(const std::string& data) {
     if (pipeline->GetColorAttachments().empty()) {
       auto* buf = script_->GetBuffer(Pipeline::kGeneratedColorBuffer);
       if (!buf) {
-        auto new_buf = pipeline->GenerateDefaultColorAttachmentBuffer();
-        buf = new_buf.get();
+        auto color_buf = pipeline->GenerateDefaultColorAttachmentBuffer();
+        buf = color_buf.get();
 
-        Result r = script_->AddBuffer(std::move(new_buf));
+        Result r = script_->AddBuffer(std::move(color_buf));
         if (!r.IsSuccess())
           return r;
       }
@@ -203,90 +277,6 @@ Result Parser::ToPipelineType(const std::string& str, PipelineType* type) {
     *type = PipelineType::kGraphics;
   else
     return Result("unknown pipeline type: " + str);
-  return {};
-}
-
-Result Parser::ToDatumType(const std::string& str, DatumType* type) {
-  assert(type);
-
-  if (str == "int8") {
-    type->SetType(DataType::kInt8);
-  } else if (str == "int16") {
-    type->SetType(DataType::kInt16);
-  } else if (str == "int32") {
-    type->SetType(DataType::kInt32);
-  } else if (str == "int64") {
-    type->SetType(DataType::kInt64);
-  } else if (str == "uint8") {
-    type->SetType(DataType::kUint8);
-  } else if (str == "uint16") {
-    type->SetType(DataType::kUint16);
-  } else if (str == "uint32") {
-    type->SetType(DataType::kUint32);
-  } else if (str == "uint64") {
-    type->SetType(DataType::kUint64);
-  } else if (str == "float") {
-    type->SetType(DataType::kFloat);
-  } else if (str == "double") {
-    type->SetType(DataType::kDouble);
-  } else if (str.length() > 7 && str.substr(0, 3) == "vec") {
-    if (str[4] != '<' || str[str.length() - 1] != '>')
-      return Result("invalid data_type provided");
-
-    if (str[3] == '2')
-      type->SetRowCount(2);
-    else if (str[3] == '3')
-      type->SetRowCount(3);
-    else if (str[3] == '4')
-      type->SetRowCount(4);
-    else
-      return Result("invalid data_type provided");
-
-    DatumType subtype;
-    Result r = ToDatumType(str.substr(5, str.length() - 6), &subtype);
-    if (!r.IsSuccess())
-      return r;
-
-    if (subtype.RowCount() > 1 || subtype.ColumnCount() > 1)
-      return Result("invalid data_type provided");
-
-    type->SetType(subtype.GetType());
-
-  } else if (str.length() > 9 && str.substr(0, 3) == "mat") {
-    if (str[4] != 'x' || str[6] != '<' || str[str.length() - 1] != '>')
-      return Result("invalid data_type provided");
-
-    if (str[3] == '2')
-      type->SetRowCount(2);
-    else if (str[3] == '3')
-      type->SetRowCount(3);
-    else if (str[3] == '4')
-      type->SetRowCount(4);
-    else
-      return Result("invalid data_type provided");
-
-    if (str[5] == '2')
-      type->SetColumnCount(2);
-    else if (str[5] == '3')
-      type->SetColumnCount(3);
-    else if (str[5] == '4')
-      type->SetColumnCount(4);
-    else
-      return Result("invalid data_type provided");
-
-    DatumType subtype;
-    Result r = ToDatumType(str.substr(7, str.length() - 8), &subtype);
-    if (!r.IsSuccess())
-      return r;
-
-    if (subtype.RowCount() > 1 || subtype.ColumnCount() > 1)
-      return Result("invalid data_type provided");
-
-    type->SetType(subtype.GetType());
-  } else {
-    return Result("invalid data_type provided");
-  }
-
   return {};
 }
 
@@ -456,7 +446,7 @@ Result Parser::ParsePipelineAttach(Pipeline* pipeline) {
     return {};
   }
   if (!token->IsString())
-    return Result("Invalid token after ATTACH");
+    return Result("invalid token after ATTACH");
 
   bool set_shader_type = false;
   ShaderType shader_type = shader->GetType();
@@ -479,7 +469,7 @@ Result Parser::ParsePipelineAttach(Pipeline* pipeline) {
     type = token->AsString();
   }
   if (set_shader_type && type != "ENTRY_POINT")
-    return Result("Unknown ATTACH parameter: " + type);
+    return Result("unknown ATTACH parameter: " + type);
 
   if (shader->GetType() == ShaderType::kShaderTypeMulti && !set_shader_type)
     return Result("ATTACH missing TYPE for multi shader");
@@ -511,7 +501,7 @@ Result Parser::ParsePipelineAttach(Pipeline* pipeline) {
       if (token->IsEOL() || token->IsEOS())
         return {};
       if (token->IsString())
-        return Result("Unknown ATTACH parameter: " + token->AsString());
+        return Result("unknown ATTACH parameter: " + token->AsString());
       return Result("extra parameters after ATTACH command");
     }
   }
@@ -532,34 +522,35 @@ Result Parser::ParseShaderSpecialization(Pipeline* pipeline) {
   if (!token->IsString())
     return Result("expected data type in SPECIALIZE subcommand");
 
-  DatumType type;
-  auto r = ToDatumType(token->AsString(), &type);
-  if (!r.IsSuccess())
-    return r;
+  auto type = ToType(token->AsString());
+  if (!type)
+    return Result("invalid data type '" + token->AsString() + "' provided");
+  if (!type->IsNumber())
+    return Result("only numeric types are accepted for specialization values");
+
+  auto num = type->AsNumber();
 
   token = tokenizer_->NextToken();
   uint32_t value = 0;
-  switch (type.GetType()) {
-    case DataType::kUint32:
-    case DataType::kInt32:
-      value = token->AsUint32();
-      break;
-    case DataType::kFloat: {
-      r = token->ConvertToDouble();
-      if (!r.IsSuccess())
-        return Result("value is not a floating point value");
-      union {
-        uint32_t u;
-        float f;
-      } u;
-      u.f = token->AsFloat();
-      value = u.u;
-      break;
-    }
-    default:
-      return Result(
-          "only 32-bit types are currently accepted for specialization values");
+  if (type::Type::IsUint32(num->GetFormatMode(), num->NumBits()) ||
+      type::Type::IsInt32(num->GetFormatMode(), num->NumBits())) {
+    value = token->AsUint32();
+  } else if (type::Type::IsFloat32(num->GetFormatMode(), num->NumBits())) {
+    Result r = token->ConvertToDouble();
+    if (!r.IsSuccess())
+      return Result("value is not a floating point value");
+
+    union {
+      uint32_t u;
+      float f;
+    } u;
+    u.f = token->AsFloat();
+    value = u.u;
+  } else {
+    return Result(
+        "only 32-bit types are currently accepted for specialization values");
   }
+
   auto& shader = pipeline->GetShaders()[pipeline->GetShaders().size() - 1];
   shader.AddSpecialization(spec_id, value);
   return {};
@@ -840,11 +831,13 @@ Result Parser::ParsePipelineSet(Pipeline* pipeline) {
     token = tokenizer_->NextToken();
     if (!token->IsString())
       return Result("expected argument identifier");
+
     arg_name = token->AsString();
   } else if (token->AsString() == "ARG_NUMBER") {
     token = tokenizer_->NextToken();
     if (!token->IsInteger())
       return Result("expected argument number");
+
     arg_no = token->AsUint32();
   } else {
     return Result("expected ARG_NAME or ARG_NUMBER");
@@ -858,17 +851,17 @@ Result Parser::ParsePipelineSet(Pipeline* pipeline) {
   if (!token->IsString())
     return Result("expected data type");
 
-  DatumType arg_type;
-  auto r = ToDatumType(token->AsString(), &arg_type);
-  if (!r.IsSuccess())
-    return r;
+  auto type = ToType(token->AsString());
+  if (!type)
+    return Result("invalid data type '" + token->AsString() + "' provided");
 
   token = tokenizer_->NextToken();
   if (!token->IsInteger() && !token->IsDouble())
     return Result("expected data value");
 
+  auto fmt = MakeUnique<Format>(type.get());
   Value value;
-  if (arg_type.IsFloat() || arg_type.IsDouble())
+  if (fmt->IsFloat32() || fmt->IsFloat64())
     value.SetDoubleValue(token->AsDouble());
   else
     value.SetIntValue(token->AsUint64());
@@ -876,10 +869,131 @@ Result Parser::ParsePipelineSet(Pipeline* pipeline) {
   Pipeline::ArgSetInfo info;
   info.name = arg_name;
   info.ordinal = arg_no;
-  info.type = arg_type;
+  info.fmt = fmt.get();
   info.value = value;
   pipeline->SetArg(std::move(info));
+  script_->RegisterFormat(std::move(fmt));
+  script_->RegisterType(std::move(type));
+
   return ValidateEndOfStatement("SET command");
+}
+
+Result Parser::ParseStruct() {
+  auto token = tokenizer_->NextToken();
+  if (!token->IsString())
+    return Result("invalid STRUCT name provided");
+
+  auto struct_name = token->AsString();
+  if (struct_name == "STRIDE")
+    return Result("missing STRUCT name");
+
+  auto s = MakeUnique<type::Struct>();
+  auto type = s.get();
+
+  Result r = script_->AddType(struct_name, std::move(s));
+  if (!r.IsSuccess())
+    return r;
+
+  token = tokenizer_->NextToken();
+  if (token->IsString()) {
+    if (token->AsString() != "STRIDE")
+      return Result("invalid token in STRUCT definition");
+
+    token = tokenizer_->NextToken();
+    if (token->IsEOL() || token->IsEOS())
+      return Result("missing value for STRIDE");
+    if (!token->IsInteger())
+      return Result("invalid value for STRIDE");
+
+    type->SetStrideInBytes(token->AsUint32());
+    token = tokenizer_->NextToken();
+  }
+  if (!token->IsEOL()) {
+    return Result("extra token " + token->ToOriginalString() +
+                  " after STRUCT header");
+  }
+
+  std::map<std::string, bool> seen;
+  for (;;) {
+    token = tokenizer_->NextToken();
+    if (!token->IsString())
+      return Result("invalid type for STRUCT member");
+    if (token->AsString() == "END")
+      break;
+
+    if (token->AsString() == struct_name)
+      return Result("recursive types are not allowed");
+
+    type::Type* member_type = script_->GetType(token->AsString());
+    if (!member_type) {
+      auto t = ToType(token->AsString());
+      if (!t) {
+        return Result("unknown type '" + token->AsString() +
+                      "' for STRUCT member");
+      }
+
+      member_type = t.get();
+      script_->RegisterType(std::move(t));
+    }
+
+    token = tokenizer_->NextToken();
+    if (token->IsEOL())
+      return Result("missing name for STRUCT member");
+    if (!token->IsString())
+      return Result("invalid name for STRUCT member");
+
+    auto member_name = token->AsString();
+    if (seen.find(member_name) != seen.end())
+      return Result("duplicate name for STRUCT member");
+
+    seen[member_name] = true;
+
+    auto m = type->AddMember(member_type);
+    m->name = member_name;
+
+    token = tokenizer_->NextToken();
+    while (token->IsString()) {
+      if (token->AsString() == "OFFSET") {
+        token = tokenizer_->NextToken();
+        if (token->IsEOL())
+          return Result("missing value for STRUCT member OFFSET");
+        if (!token->IsInteger())
+          return Result("invalid value for STRUCT member OFFSET");
+
+        m->offset_in_bytes = token->AsInt32();
+      } else if (token->AsString() == "ARRAY_STRIDE") {
+        token = tokenizer_->NextToken();
+        if (token->IsEOL())
+          return Result("missing value for STRUCT member ARRAY_STRIDE");
+        if (!token->IsInteger())
+          return Result("invalid value for STRUCT member ARRAY_STRIDE");
+        if (!member_type->IsArray())
+          return Result("ARRAY_STRIDE only valid on array members");
+
+        m->array_stride_in_bytes = token->AsInt32();
+      } else if (token->AsString() == "MATRIX_STRIDE") {
+        token = tokenizer_->NextToken();
+        if (token->IsEOL())
+          return Result("missing value for STRUCT member MATRIX_STRIDE");
+        if (!token->IsInteger())
+          return Result("invalid value for STRUCT member MATRIX_STRIDE");
+        if (!member_type->IsMatrix())
+          return Result("MATRIX_STRIDE only valid on matrix members");
+
+        m->matrix_stride_in_bytes = token->AsInt32();
+      } else {
+        return Result("unknown param '" + token->AsString() +
+                      "' for STRUCT member");
+      }
+
+      token = tokenizer_->NextToken();
+    }
+
+    if (!token->IsEOL())
+      return Result("extra param for STRUCT member");
+  }
+
+  return {};
 }
 
 Result Parser::ParseBuffer() {
@@ -910,12 +1024,13 @@ Result Parser::ParseBuffer() {
 
     buffer = MakeUnique<Buffer>();
 
-    FormatParser fmt_parser;
-    auto fmt = fmt_parser.Parse(token->AsString());
-    if (fmt == nullptr)
+    auto type = script_->ParseType(token->AsString());
+    if (!type)
       return Result("invalid BUFFER FORMAT");
 
-    buffer->SetFormat(std::move(fmt));
+    auto fmt = MakeUnique<Format>(type);
+    buffer->SetFormat(fmt.get());
+    script_->RegisterFormat(std::move(fmt));
   } else {
     return Result("unknown BUFFER command provided: " + cmd);
   }
@@ -933,20 +1048,35 @@ Result Parser::ParseBufferInitializer(Buffer* buffer) {
   if (!token->IsString())
     return Result("BUFFER invalid data type");
 
-  FormatParser fp;
-  auto fmt = fp.Parse(token->AsString());
-  if (fmt != nullptr) {
-    buffer->SetFormat(std::move(fmt));
+  auto type = script_->ParseType(token->AsString());
+  std::unique_ptr<Format> fmt;
+  if (type != nullptr) {
+    fmt = MakeUnique<Format>(type);
+    buffer->SetFormat(fmt.get());
   } else {
-    DatumType type;
-    Result r = ToDatumType(token->AsString(), &type);
-    if (!r.IsSuccess())
-      return r;
+    auto new_type = ToType(token->AsString());
+    if (!new_type)
+      return Result("invalid data type '" + token->AsString() + "' provided");
 
-    buffer->SetFormat(type.AsFormat());
+    fmt = MakeUnique<Format>(new_type.get());
+    buffer->SetFormat(fmt.get());
+    type = new_type.get();
+    script_->RegisterType(std::move(new_type));
   }
+  script_->RegisterFormat(std::move(fmt));
 
   token = tokenizer_->NextToken();
+  if (!token->IsString())
+    return Result("BUFFER missing initializer");
+
+  if (token->AsString() == "STD140") {
+    buffer->GetFormat()->SetLayout(Format::Layout::kStd140);
+    token = tokenizer_->NextToken();
+  } else if (token->AsString() == "STD430") {
+    buffer->GetFormat()->SetLayout(Format::Layout::kStd430);
+    token = tokenizer_->NextToken();
+  }
+
   if (!token->IsString())
     return Result("BUFFER missing initializer");
 
@@ -989,7 +1119,7 @@ Result Parser::ParseBufferInitializerFill(Buffer* buffer,
     return Result("invalid BUFFER fill value");
 
   auto fmt = buffer->GetFormat();
-  bool is_double_data = fmt->IsFloat() || fmt->IsDouble();
+  bool is_double_data = fmt->IsFloat32() || fmt->IsFloat64();
 
   // Inflate the size because our items are multi-dimensional.
   size_in_items = size_in_items * fmt->InputNeededPerElement();
@@ -1002,7 +1132,10 @@ Result Parser::ParseBufferInitializerFill(Buffer* buffer,
     else
       values[i].SetIntValue(token->AsUint64());
   }
-  buffer->SetData(std::move(values));
+  Result r = buffer->SetData(std::move(values));
+  if (!r.IsSuccess())
+    return r;
+
   return ValidateEndOfStatement("BUFFER fill command");
 }
 
@@ -1014,17 +1147,21 @@ Result Parser::ParseBufferInitializerSeries(Buffer* buffer,
   if (!token->IsInteger() && !token->IsDouble())
     return Result("invalid BUFFER series_from value");
 
-  auto fmt = buffer->GetFormat();
-  if (fmt->RowCount() > 1 || fmt->ColumnCount() > 1)
+  auto type = buffer->GetFormat()->GetType();
+  if (type->IsMatrix() || type->IsVec())
     return Result("BUFFER series_from must not be multi-row/column types");
 
-  bool is_double_data = fmt->IsFloat() || fmt->IsDouble();
-
   Value counter;
-  if (is_double_data)
+
+  auto n = type->AsNumber();
+  FormatMode mode = n->GetFormatMode();
+  uint32_t num_bits = n->NumBits();
+  if (type::Type::IsFloat32(mode, num_bits) ||
+      type::Type::IsFloat64(mode, num_bits)) {
     counter.SetDoubleValue(token->AsDouble());
-  else
+  } else {
     counter.SetIntValue(token->AsUint64());
+  }
 
   token = tokenizer_->NextToken();
   if (!token->IsString())
@@ -1041,7 +1178,8 @@ Result Parser::ParseBufferInitializerSeries(Buffer* buffer,
   std::vector<Value> values;
   values.resize(size_in_items);
   for (size_t i = 0; i < size_in_items; ++i) {
-    if (is_double_data) {
+    if (type::Type::IsFloat32(mode, num_bits) ||
+        type::Type::IsFloat64(mode, num_bits)) {
       double value = counter.AsDouble();
       values[i].SetDoubleValue(value);
       counter.SetDoubleValue(value + token->AsDouble());
@@ -1051,13 +1189,18 @@ Result Parser::ParseBufferInitializerSeries(Buffer* buffer,
       counter.SetIntValue(value + token->AsUint64());
     }
   }
-  buffer->SetData(std::move(values));
+  Result r = buffer->SetData(std::move(values));
+  if (!r.IsSuccess())
+    return r;
+
   return ValidateEndOfStatement("BUFFER series_from command");
 }
 
 Result Parser::ParseBufferInitializerData(Buffer* buffer) {
   auto fmt = buffer->GetFormat();
-  bool is_double_type = fmt->IsFloat() || fmt->IsDouble();
+  const auto& segs = fmt->GetSegments();
+  size_t seg_idx = 0;
+  uint32_t value_count = 0;
 
   std::vector<Value> values;
   for (auto token = tokenizer_->NextToken();; token = tokenizer_->NextToken()) {
@@ -1069,26 +1212,49 @@ Result Parser::ParseBufferInitializerData(Buffer* buffer) {
       break;
     if (!token->IsInteger() && !token->IsDouble() && !token->IsHex())
       return Result("invalid BUFFER data value: " + token->ToOriginalString());
-    if (!is_double_type && token->IsDouble())
-      return Result("invalid BUFFER data value: " + token->ToOriginalString());
+
+    while (segs[seg_idx].IsPadding()) {
+      ++seg_idx;
+      if (seg_idx >= segs.size())
+        seg_idx = 0;
+    }
 
     Value v;
-    if (is_double_type) {
+    if (type::Type::IsFloat(segs[seg_idx].GetFormatMode())) {
       token->ConvertToDouble();
 
       double val = token->IsHex() ? static_cast<double>(token->AsHex())
                                   : token->AsDouble();
       v.SetDoubleValue(val);
+      ++value_count;
     } else {
+      if (token->IsDouble()) {
+        return Result("invalid BUFFER data value: " +
+                      token->ToOriginalString());
+      }
+
       uint64_t val = token->IsHex() ? token->AsHex() : token->AsUint64();
       v.SetIntValue(val);
+      ++value_count;
     }
+    ++seg_idx;
+    if (seg_idx >= segs.size())
+      seg_idx = 0;
 
     values.emplace_back(v);
   }
+  // Write final padding bytes
+  while (segs[seg_idx].IsPadding()) {
+    ++seg_idx;
+    if (seg_idx >= segs.size())
+      break;
+  }
 
-  buffer->SetValueCount(static_cast<uint32_t>(values.size()));
-  buffer->SetData(std::move(values));
+  buffer->SetValueCount(value_count);
+  Result r = buffer->SetData(std::move(values));
+  if (!r.IsSuccess())
+    return r;
+
   return ValidateEndOfStatement("BUFFER data command");
 }
 
@@ -1321,10 +1487,18 @@ Result Parser::ParseValues(const std::string& name,
   assert(values);
 
   auto token = tokenizer_->NextToken();
+  const auto& segs = fmt->GetSegments();
+  size_t seg_idx = 0;
   while (!token->IsEOL() && !token->IsEOS()) {
     Value v;
 
-    if (fmt->IsFloat() || fmt->IsDouble()) {
+    while (segs[seg_idx].IsPadding()) {
+      ++seg_idx;
+      if (seg_idx >= segs.size())
+        seg_idx = 0;
+    }
+
+    if (type::Type::IsFloat(segs[seg_idx].GetFormatMode())) {
       if (!token->IsInteger() && !token->IsDouble()) {
         return Result(std::string("Invalid value provided to ") + name +
                       " command: " + token->ToOriginalString());
@@ -1343,6 +1517,9 @@ Result Parser::ParseValues(const std::string& name,
 
       v.SetIntValue(token->AsUint64());
     }
+    ++seg_idx;
+    if (seg_idx >= segs.size())
+      seg_idx = 0;
 
     values->push_back(v);
     token = tokenizer_->NextToken();
@@ -1361,6 +1538,10 @@ Result Parser::ParseExpect() {
     return Result("missing buffer name between EXPECT and EQ_BUFFER");
   if (token->AsString() == "RMSE_BUFFER")
     return Result("missing buffer name between EXPECT and RMSE_BUFFER");
+  if (token->AsString() == "EQ_HISTOGRAM_EMD_BUFFER") {
+    return Result(
+        "missing buffer name between EXPECT and EQ_HISTOGRAM_EMD_BUFFER");
+  }
 
   size_t line = tokenizer_->GetCurrentLine();
   auto* buffer = script_->GetBuffer(token->AsString());
@@ -1371,9 +1552,10 @@ Result Parser::ParseExpect() {
   token = tokenizer_->NextToken();
 
   if (!token->IsString())
-    return Result("Invalid comparator in EXPECT command");
+    return Result("invalid comparator in EXPECT command");
 
-  if (token->AsString() == "EQ_BUFFER" || token->AsString() == "RMSE_BUFFER") {
+  if (token->AsString() == "EQ_BUFFER" || token->AsString() == "RMSE_BUFFER" ||
+      token->AsString() == "EQ_HISTOGRAM_EMD_BUFFER") {
     auto type = token->AsString();
 
     token = tokenizer_->NextToken();
@@ -1411,11 +1593,27 @@ Result Parser::ParseExpect() {
 
       token = tokenizer_->NextToken();
       if (!token->IsString() && token->AsString() == "TOLERANCE")
-        return Result("Missing TOLERANCE for EXPECT RMSE_BUFFER");
+        return Result("missing TOLERANCE for EXPECT RMSE_BUFFER");
 
       token = tokenizer_->NextToken();
       if (!token->IsInteger() && !token->IsDouble())
-        return Result("Invalid TOLERANCE for EXPECT RMSE_BUFFER");
+        return Result("invalid TOLERANCE for EXPECT RMSE_BUFFER");
+
+      Result r = token->ConvertToDouble();
+      if (!r.IsSuccess())
+        return r;
+
+      cmd->SetTolerance(token->AsFloat());
+    } else if (type == "EQ_HISTOGRAM_EMD_BUFFER") {
+      cmd->SetComparator(CompareBufferCommand::Comparator::kHistogramEmd);
+
+      token = tokenizer_->NextToken();
+      if (!token->IsString() && token->AsString() == "TOLERANCE")
+        return Result("missing TOLERANCE for EXPECT EQ_HISTOGRAM_EMD_BUFFER");
+
+      token = tokenizer_->NextToken();
+      if (!token->IsInteger() && !token->IsDouble())
+        return Result("invalid TOLERANCE for EXPECT EQ_HISTOGRAM_EMD_BUFFER");
 
       Result r = token->ConvertToDouble();
       if (!r.IsSuccess())
@@ -1567,7 +1765,7 @@ Result Parser::ParseExpect() {
   }
 
   probe->SetComparator(cmp);
-  probe->SetFormat(MakeUnique<Format>(*buffer->GetFormat()));
+  probe->SetFormat(buffer->GetFormat());
   probe->SetOffset(static_cast<uint32_t>(x));
 
   std::vector<Value> values;

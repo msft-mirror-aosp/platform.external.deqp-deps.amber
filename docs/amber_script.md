@@ -117,7 +117,7 @@ either image buffers or, what the target API would refer to as a buffer.
  * `float`
  * `double`
  * vec[2,3,4]{type}
- * mat[2,3,4]x[2,3,4]{type}
+ * mat[2,3,4]x[2,3,4]{type}  (mat<columns>x<rows>)
  * Any of the `Image Formats` listed below.
 
 Sized arrays and structures are not currently representable.
@@ -125,12 +125,14 @@ Sized arrays and structures are not currently representable.
 ```groovy
 # Filling the buffer with a given set of data. The values must be
 # of |type| data. The data can be provided as the type or as a hex value.
-BUFFER {name} DATA_TYPE {type} DATA
+# Buffers are STD430 by default.
+BUFFER {name} DATA_TYPE {type} {STD140 | STD430} DATA
 _value_+
 END
 
 # Defines a buffer which is filled with data as specified by the `initializer`.
-BUFFER {name} DATA_TYPE {type} SIZE _size_in_items_ {initializer}
+BUFFER {name} DATA_TYPE {type} {STD140 | STD430} SIZE _size_in_items_ \
+    {initializer}
 
 # Creates a buffer which will store the given `FORMAT` of data. These
 # buffers are used as image and depth buffers in the `PIPELINE` commands.
@@ -283,7 +285,7 @@ attachment content, depth/stencil content, uniform buffers, etc.
   INDEX_DATA {buffer_name}
 ```
 
-##### OpenCL Plain-Old-Data Arguments
+#### OpenCL Plain-Old-Data Arguments
 OpenCL kernels can have plain-old-data (pod or pod_ubo in the desriptor map)
 arguments set their data via this command. Amber will generate the appropriate
 buffers for the pipeline populated with the specified data.
@@ -297,7 +299,7 @@ buffers for the pipeline populated with the specified data.
   SET KERNEL ARG_NUMBER _number_ AS {data_type} _val_
 ```
 
-##### Topologies
+#### Topologies
  * `point_list`
  * `line_list`
  * `line_list_with_adjacency`
@@ -397,11 +399,11 @@ The commands which can be used inside a `REPEAT` block are:
 ### Commands
 
 ```groovy
-# Sets the clear color to use for |pipeline| which must be a `graphics`
+# Sets the clear color to use for |pipeline| which must be a graphics
 # pipeline. The colors are integers from 0 - 255.
 CLEAR_COLOR {pipeline} _r (0 - 255)_ _g (0 - 255)_ _b (0 - 255)_ _a (0 - 255)_
 
-# Instructs the |pipeline| which must be a `graphics` pipeline to execute the
+# Instructs the |pipeline| which must be a graphics pipeline to execute the
 # clear command.
 CLEAR {pipeline}
 ```
@@ -419,6 +421,7 @@ CLEAR {pipeline}
  * `EQ_RGBA`
  * `EQ_BUFFER`
  * `RMSE_BUFFER`
+ * `EQ_HISTOGRAM_EMD_BUFFER`
 
 ```groovy
 # Checks that |buffer_name| at |x| has the given |value|s when compared
@@ -449,14 +452,20 @@ EXPECT {buffer_name} IDX _x_in_pixels_ _y_in_pixels_ \
 EXPECT {buffer_1} EQ_BUFFER {buffer_2}
 
 # Checks that the Root Mean Square Error when comparing |buffer_1| to
-# |buffer_2| is less than or equal too |tolerance|. Note, |tolerance| is a
+# |buffer_2| is less than or equal to |tolerance|. Note, |tolerance| is a
 # unit-less number.
 EXPECT {buffer_1} RMSE_BUFFER {buffer_2} TOLERANCE _value_
+
+# Checks that the Earth Mover's Distance when comparing histograms of
+# |buffer_1| to |buffer_2| is less than or equal to |tolerance|.
+# Note, |tolerance| is a unit-less number.
+EXPECT {buffer_1} EQ_HISTOGRAM_EMD_BUFFER {buffer_2} TOLERANCE _value_
 ```
 
 ## Examples
 
 ### Compute Shader
+
 ```groovy
 #!amber
 # Simple amber compute shader.
@@ -494,6 +503,7 @@ EXPECT kComputeBuffer IDX 263168 EQ 128 128
 ```
 
 ### Entry Points
+
 ```groovy
 #!amber
 
@@ -570,6 +580,7 @@ EXPECT kImgBuffer IDX 128 128 SIZE 128 128 EQ_RGB 0 255 0
 ```
 
 ### Buffers
+
 ```groovy
 #!amber
 
@@ -669,6 +680,7 @@ RUN kGraphicsPipeline DRAW_ARRAY AS triangle_list START_IDX 0 COUNT 24
 ```
 
 ### OpenCL-C Shaders
+
 ```groovy
 SHADER compute my_shader OPENCL-C
 kernel void line(const int* in, global int* out, int m, int b) {
