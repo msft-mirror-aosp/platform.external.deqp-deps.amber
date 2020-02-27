@@ -16,6 +16,7 @@
 
 #include "gtest/gtest.h"
 #include "src/make_unique.h"
+#include "src/type_parser.h"
 
 namespace amber {
 namespace {
@@ -523,29 +524,31 @@ TEST_F(PipelineTest, OpenCLGeneratePodBuffers) {
   // Set commands.
   Value int_value;
   int_value.SetIntValue(1);
-  DatumType int_type;
-  int_type.SetType(DataType::kInt32);
-  DatumType char_type;
-  char_type.SetType(DataType::kInt8);
+
+  TypeParser parser;
+  auto int_type = parser.Parse("R32_SINT");
+  auto int_fmt = MakeUnique<Format>(int_type.get());
+  auto char_type = parser.Parse("R8_SINT");
+  auto char_fmt = MakeUnique<Format>(char_type.get());
 
   Pipeline::ArgSetInfo arg_info1;
   arg_info1.name = "arg_a";
   arg_info1.ordinal = 99;
-  arg_info1.type = int_type;
+  arg_info1.fmt = int_fmt.get();
   arg_info1.value = int_value;
   p.SetArg(std::move(arg_info1));
 
   Pipeline::ArgSetInfo arg_info2;
   arg_info2.name = "arg_b";
   arg_info2.ordinal = 99;
-  arg_info2.type = char_type;
+  arg_info2.fmt = char_fmt.get();
   arg_info2.value = int_value;
   p.SetArg(std::move(arg_info2));
 
   Pipeline::ArgSetInfo arg_info3;
   arg_info3.name = "arg_c";
   arg_info3.ordinal = 99;
-  arg_info3.type = int_type;
+  arg_info3.fmt = int_fmt.get();
   arg_info3.value = int_value;
   p.SetArg(std::move(arg_info3));
 
@@ -587,13 +590,15 @@ TEST_F(PipelineTest, OpenCLGeneratePodBuffersBadName) {
   // Set commands.
   Value int_value;
   int_value.SetIntValue(1);
-  DatumType int_type;
-  int_type.SetType(DataType::kInt32);
+
+  TypeParser parser;
+  auto int_type = parser.Parse("R32_SINT");
+  auto int_fmt = MakeUnique<Format>(int_type.get());
 
   Pipeline::ArgSetInfo arg_info1;
   arg_info1.name = "arg_z";
   arg_info1.ordinal = 99;
-  arg_info1.type = int_type;
+  arg_info1.fmt = int_fmt.get();
   arg_info1.value = int_value;
   p.SetArg(std::move(arg_info1));
 
@@ -628,13 +633,15 @@ TEST_F(PipelineTest, OpenCLGeneratePodBuffersBadSize) {
   // Set commands.
   Value int_value;
   int_value.SetIntValue(1);
-  DatumType short_type;
-  short_type.SetType(DataType::kInt16);
+
+  TypeParser parser;
+  auto short_type = parser.Parse("R16_SINT");
+  auto short_fmt = MakeUnique<Format>(short_type.get());
 
   Pipeline::ArgSetInfo arg_info1;
   arg_info1.name = "";
   arg_info1.ordinal = 0;
-  arg_info1.type = short_type;
+  arg_info1.fmt = short_fmt.get();
   arg_info1.value = int_value;
   p.SetArg(std::move(arg_info1));
 
@@ -687,29 +694,31 @@ TEST_F(PipelineTest, OpenCLClone) {
   // Set commands.
   Value int_value;
   int_value.SetIntValue(1);
-  DatumType int_type;
-  int_type.SetType(DataType::kInt32);
-  DatumType char_type;
-  char_type.SetType(DataType::kInt8);
+
+  TypeParser parser;
+  auto int_type = parser.Parse("R32_SINT");
+  auto int_fmt = MakeUnique<Format>(int_type.get());
+  auto char_type = parser.Parse("R8_SINT");
+  auto char_fmt = MakeUnique<Format>(char_type.get());
 
   Pipeline::ArgSetInfo arg_info1;
   arg_info1.name = "arg_a";
   arg_info1.ordinal = 99;
-  arg_info1.type = int_type;
+  arg_info1.fmt = int_fmt.get();
   arg_info1.value = int_value;
   p.SetArg(std::move(arg_info1));
 
   Pipeline::ArgSetInfo arg_info2;
   arg_info2.name = "arg_b";
   arg_info2.ordinal = 99;
-  arg_info2.type = char_type;
+  arg_info2.fmt = char_fmt.get();
   arg_info2.value = int_value;
   p.SetArg(std::move(arg_info2));
 
   Pipeline::ArgSetInfo arg_info3;
   arg_info3.name = "arg_c";
   arg_info3.ordinal = 99;
-  arg_info3.type = int_type;
+  arg_info3.fmt = int_fmt.get();
   arg_info3.value = int_value;
   p.SetArg(std::move(arg_info3));
 

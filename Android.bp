@@ -12,6 +12,8 @@ cc_defaults {
     rtti: false,
     sdk_version: "27",
     stl: "libc++_static",
+    shared_libs: ["libvulkan"],
+    export_shared_lib_headers: ["libvulkan"],
 }
 
 cc_library_static {
@@ -27,12 +29,10 @@ cc_library_static {
         "src/buffer.cc",
         "src/command.cc",
         "src/command_data.cc",
-        "src/datum_type.cc",
         "src/descriptor_set_and_binding_parser.cc",
         "src/engine.cc",
         "src/executor.cc",
         "src/format.cc",
-        "src/format_parser.cc",
         "src/parser.cc",
         "src/pipeline.cc",
         "src/pipeline_data.cc",
@@ -41,8 +41,9 @@ cc_library_static {
         "src/script.cc",
         "src/shader.cc",
         "src/shader_compiler.cc",
-        "src/sleep.cc",
         "src/tokenizer.cc",
+        "src/type_parser.cc",
+        "src/type.cc",
         "src/value.cc",
         "src/verifier.cc",
         "src/vulkan_engine_config.cc",
