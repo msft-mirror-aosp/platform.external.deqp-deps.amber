@@ -1,3 +1,26 @@
+package {
+    default_applicable_licenses: ["external_deqp-deps_amber_license"],
+}
+
+// Added automatically by a large-scale-change
+//
+// large-scale-change included anything that looked like it might be a license
+// text as a license_text. e.g. LICENSE, NOTICE, COPYING etc.
+//
+// Please consider removing redundant or irrelevant files from 'license_text:'.
+// See: http://go/android-license-faq
+license {
+    name: "external_deqp-deps_amber_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-Apache-2.0",
+    ],
+    license_text: [
+        "LICENSE",
+        "license-checker.cfg",
+    ],
+}
+
 genrule {
     name: "deqp_amber_gen_vk_wrappers",
     out: ["vk-wrappers.inc", "vk-wrappers.h"],
