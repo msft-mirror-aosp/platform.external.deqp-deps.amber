@@ -1,4 +1,3 @@
-
 genrule {
     name: "deqp_amber_gen_vk_wrappers",
     out: ["vk-wrappers.inc", "vk-wrappers.h"],
