@@ -23,10 +23,10 @@ license {
 
 genrule {
     name: "deqp_amber_gen_vk_wrappers",
-    out: ["vk-wrappers.inc", "vk-wrappers.h"],
-    srcs: ["src/vulkan/vk-funcs.inc"],
+    out: ["vk-wrappers-1-0.inc", "vk-wrappers-1-0.h", "vk-wrappers-1-1.inc", "vk-wrappers-1-1.h"],
+    srcs: ["src/vulkan/vk-funcs-1-0.inc", "src/vulkan/vk-funcs-1-1.inc"],
     tool_files: ["tools/update_vk_wrappers.py"],
-    cmd: "$(location) $(genDir) $$(dirname $(location src/vulkan/vk-funcs.inc))/../..",
+    cmd: "$(location) $(genDir) $$(dirname $(location src/vulkan/vk-funcs-1-0.inc))/../..",
 }
 
 cc_library_static {
