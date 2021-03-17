@@ -17,7 +17,6 @@ license {
     ],
     license_text: [
         "LICENSE",
-        "license-checker.cfg",
     ],
 }
 
