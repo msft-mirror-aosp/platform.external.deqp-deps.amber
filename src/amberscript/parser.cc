@@ -1301,20 +1301,60 @@ Result Parser::ParsePipelineVertexData(Pipeline* pipeline) {
   const uint32_t location = token->AsUint32();
 
   InputRate rate = InputRate::kVertex;
+  uint32_t offset = 0;
+  Format* format = buffer->GetFormat();
+  uint32_t stride = 0;
+
   token = tokenizer_->PeekNextToken();
-  if (token->IsIdentifier() && token->AsString() == "RATE") {
-    tokenizer_->NextToken();
-    token = tokenizer_->NextToken();
-    if (!token->IsIdentifier())
-      return Result("missing input rate value for RATE");
-    if (token->AsString() == "instance") {
-      rate = InputRate::kInstance;
-    } else if (token->AsString() != "vertex") {
-      return Result("expecting 'vertex' or 'instance' for RATE value");
+  while (token->IsIdentifier()) {
+    if (token->AsString() == "RATE") {
+      tokenizer_->NextToken();
+      token = tokenizer_->NextToken();
+      if (!token->IsIdentifier())
+        return Result("missing input rate value for RATE");
+      if (token->AsString() == "instance") {
+        rate = InputRate::kInstance;
+      } else if (token->AsString() != "vertex") {
+        return Result("expecting 'vertex' or 'instance' for RATE value");
+      }
+    } else if (token->AsString() == "OFFSET") {
+      tokenizer_->NextToken();
+      token = tokenizer_->NextToken();
+      if (!token->IsInteger())
+        return Result("expected unsigned integer for OFFSET");
+      offset = token->AsUint32();
+    } else if (token->AsString() == "STRIDE") {
+      tokenizer_->NextToken();
+      token = tokenizer_->NextToken();
+      if (!token->IsInteger())
+        return Result("expected unsigned integer for STRIDE");
+      stride = token->AsUint32();
+      if (stride == 0)
+        return Result("STRIDE needs to be larger than zero");
+    } else if (token->AsString() == "FORMAT") {
+      tokenizer_->NextToken();
+      token = tokenizer_->NextToken();
+      if (!token->IsIdentifier())
+        return Result("vertex data FORMAT must be an identifier");
+      auto type = script_->ParseType(token->AsString());
+      if (!type)
+        return Result("invalid vertex data FORMAT");
+      auto fmt = MakeUnique<Format>(type);
+      format = fmt.get();
+      script_->RegisterFormat(std::move(fmt));
+    } else {
+      return Result("unexpected identifier for VERTEX_DATA command: " +
+                    token->ToOriginalString());
     }
+
+    token = tokenizer_->PeekNextToken();
   }
 
-  Result r = pipeline->AddVertexBuffer(buffer, location, rate);
+  if (stride == 0)
+    stride = format->SizeInBytes();
+
+  Result r =
+      pipeline->AddVertexBuffer(buffer, location, rate, format, offset, stride);
   if (!r.IsSuccess())
     return r;
 
@@ -1897,8 +1937,10 @@ Result Parser::ParseImage() {
 
   token = tokenizer_->PeekNextToken();
   while (token->IsIdentifier()) {
-    if (token->AsString() == "FILL" || token->AsString() == "SERIES_FROM")
+    if (token->AsString() == "FILL" || token->AsString() == "SERIES_FROM" ||
+        token->AsString() == "DATA") {
       break;
+    }
 
     tokenizer_->NextToken();
 
@@ -2005,7 +2047,18 @@ Result Parser::ParseImage() {
   // Parse initializers.
   token = tokenizer_->NextToken();
   if (token->IsIdentifier()) {
-    if (token->AsString() == "FILL") {
+    if (token->AsString() == "DATA") {
+      Result r = ParseBufferInitializerData(buffer.get());
+      if (!r.IsSuccess())
+        return r;
+
+      if (size_in_items != buffer->ElementCount()) {
+        return Result(
+            "Elements provided in data does not match size specified: " +
+            std::to_string(size_in_items) + " specified vs " +
+            std::to_string(buffer->ElementCount()) + " provided");
+      }
+    } else if (token->AsString() == "FILL") {
       Result r = ParseBufferInitializerFill(buffer.get(), size_in_items);
       if (!r.IsSuccess())
         return r;
@@ -2854,7 +2907,7 @@ Result Parser::ParseValues(const std::string& name,
     }
 
     if (type::Type::IsFloat(segs[seg_idx].GetFormatMode())) {
-      if (!token->IsInteger() && !token->IsDouble()) {
+      if (!token->IsInteger() && !token->IsDouble() && !token->IsHex()) {
         return Result(std::string("Invalid value provided to ") + name +
                       " command: " + token->ToOriginalString());
       }
@@ -2865,12 +2918,13 @@ Result Parser::ParseValues(const std::string& name,
 
       v.SetDoubleValue(token->AsDouble());
     } else {
-      if (!token->IsInteger()) {
+      if (!token->IsInteger() && !token->IsHex()) {
         return Result(std::string("Invalid value provided to ") + name +
                       " command: " + token->ToOriginalString());
       }
 
-      v.SetIntValue(token->AsUint64());
+      uint64_t val = token->IsHex() ? token->AsHex() : token->AsUint64();
+      v.SetIntValue(val);
     }
     ++seg_idx;
     if (seg_idx >= segs.size())
