@@ -602,6 +602,8 @@ Result Parser::ParsePipelineBody(const std::string& cmd_name,
       r = ParsePipelineShaderOptimizations(pipeline.get());
     } else if (tok == "FRAMEBUFFER_SIZE") {
       r = ParsePipelineFramebufferSize(pipeline.get());
+    } else if (tok == "VIEWPORT") {
+      r = ParsePipelineViewport(pipeline.get());
     } else if (tok == "BIND") {
       r = ParsePipelineBind(pipeline.get());
     } else if (tok == "VERTEX_DATA") {
@@ -949,6 +951,75 @@ Result Parser::ParsePipelineFramebufferSize(Pipeline* pipeline) {
   return ValidateEndOfStatement("FRAMEBUFFER_SIZE command");
 }
 
+Result Parser::ParsePipelineViewport(Pipeline* pipeline) {
+  Viewport vp;
+  vp.mind = 0.0f;
+  vp.maxd = 1.0f;
+
+  float val[2];
+  for (int i = 0; i < 2; i++) {
+    auto token = tokenizer_->NextToken();
+    if (token->IsEOL() || token->IsEOS())
+      return Result("missing offset for VIEWPORT command");
+    Result r = token->ConvertToDouble();
+    if (!r.IsSuccess())
+      return Result("invalid offset for VIEWPORT command");
+
+    val[i] = token->AsFloat();
+  }
+  vp.x = val[0];
+  vp.y = val[1];
+
+  auto token = tokenizer_->NextToken();
+  if (!token->IsIdentifier() || token->AsString() != "SIZE")
+    return Result("missing SIZE for VIEWPORT command");
+
+  for (int i = 0; i < 2; i++) {
+    token = tokenizer_->NextToken();
+    if (token->IsEOL() || token->IsEOS())
+      return Result("missing size for VIEWPORT command");
+    Result r = token->ConvertToDouble();
+    if (!r.IsSuccess())
+      return Result("invalid size for VIEWPORT command");
+
+    val[i] = token->AsFloat();
+  }
+  vp.w = val[0];
+  vp.h = val[1];
+
+  token = tokenizer_->PeekNextToken();
+  while (token->IsIdentifier()) {
+    if (token->AsString() == "MIN_DEPTH") {
+      tokenizer_->NextToken();
+      token = tokenizer_->NextToken();
+      if (token->IsEOL() || token->IsEOS())
+        return Result("missing min_depth for VIEWPORT command");
+      Result r = token->ConvertToDouble();
+      if (!r.IsSuccess())
+        return Result("invalid min_depth for VIEWPORT command");
+
+      vp.mind = token->AsFloat();
+    }
+    if (token->AsString() == "MAX_DEPTH") {
+      tokenizer_->NextToken();
+      token = tokenizer_->NextToken();
+      if (token->IsEOL() || token->IsEOS())
+        return Result("missing max_depth for VIEWPORT command");
+      Result r = token->ConvertToDouble();
+      if (!r.IsSuccess())
+        return Result("invalid max_depth for VIEWPORT command");
+
+      vp.maxd = token->AsFloat();
+    }
+
+    token = tokenizer_->PeekNextToken();
+  }
+
+  pipeline->GetPipelineData()->SetViewport(vp);
+
+  return ValidateEndOfStatement("VIEWPORT command");
+}
+
 Result Parser::ToBufferType(const std::string& name, BufferType* type) {
   assert(type);
   if (name == "color")
@@ -1172,10 +1243,60 @@ Result Parser::ParsePipelineBind(Pipeline* pipeline) {
           }
         }
 
+        // Set default descriptor buffer offsets to 0 and descriptor buffer
+        // ranges to VK_WHOLE_SIZE (~0ULL).
+        std::vector<uint64_t> descriptor_offsets(buffers.size(), 0);
+        std::vector<uint64_t> descriptor_ranges(buffers.size(), ~0ULL);
+        if (buffer_type == BufferType::kUniformDynamic ||
+            buffer_type == BufferType::kStorageDynamic ||
+            buffer_type == BufferType::kStorage ||
+            buffer_type == BufferType::kUniform) {
+          token = tokenizer_->PeekNextToken();
+          if (token->IsIdentifier() &&
+              token->AsString() == "DESCRIPTOR_OFFSET") {
+            token = tokenizer_->NextToken();
+            for (size_t i = 0; i < buffers.size(); i++) {
+              token = tokenizer_->NextToken();
+              if (!token->IsInteger()) {
+                if (i > 0) {
+                  return Result(
+                      "expecting a DESCRIPTOR_OFFSET value for each buffer in "
+                      "the array");
+                } else {
+                  return Result(
+                      "expecting an integer value for DESCRIPTOR_OFFSET");
+                }
+              }
+              descriptor_offsets[i] = token->AsUint64();
+            }
+          }
+
+          token = tokenizer_->PeekNextToken();
+          if (token->IsIdentifier() &&
+              token->AsString() == "DESCRIPTOR_RANGE") {
+            token = tokenizer_->NextToken();
+            for (size_t i = 0; i < buffers.size(); i++) {
+              token = tokenizer_->NextToken();
+              if (!token->IsInteger()) {
+                if (i > 0) {
+                  return Result(
+                      "expecting a DESCRIPTOR_RANGE value for each buffer in "
+                      "the array");
+                } else {
+                  return Result(
+                      "expecting an integer value for DESCRIPTOR_RANGE");
+                }
+              }
+              descriptor_ranges[i] = token->AsUint64();
+            }
+          }
+        }
+
         pipeline->ClearBuffers(descriptor_set, binding);
         for (size_t i = 0; i < buffers.size(); i++) {
           pipeline->AddBuffer(buffers[i], buffer_type, descriptor_set, binding,
-                              base_mip_level, dynamic_offsets[i]);
+                              base_mip_level, dynamic_offsets[i],
+                              descriptor_offsets[i], descriptor_ranges[i]);
         }
       } else if (token->IsIdentifier() && token->AsString() == "KERNEL") {
         token = tokenizer_->NextToken();
