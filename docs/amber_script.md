@@ -48,6 +48,20 @@ with:
  * `Storage16BitFeatures.storageInputOutput16`
  * `SubgroupSizeControl.subgroupSizeControl`
  * `SubgroupSizeControl.computeFullSubgroups`
+ * `SubgroupSupportedOperations.basic`
+ * `SubgroupSupportedOperations.vote`
+ * `SubgroupSupportedOperations.arithmetic`
+ * `SubgroupSupportedOperations.ballot`
+ * `SubgroupSupportedOperations.shuffle`
+ * `SubgroupSupportedOperations.shuffleRelative`
+ * `SubgroupSupportedOperations.clustered`
+ * `SubgroupSupportedOperations.quad`
+ * `SubgroupSupportedStages.vertex`
+ * `SubgroupSupportedStages.tessellationControl`
+ * `SubgroupSupportedStages.tessellationEvaluation`
+ * `SubgroupSupportedStages.geometry`
+ * `SubgroupSupportedStages.fragment`
+ * `SubgroupSupportedStages.compute`
 
 
 Extensions can be enabled with the `DEVICE_EXTENSION` and `INSTANCE_EXTENSION`
@@ -427,6 +441,11 @@ The following commands are all specified within the `PIPELINE` command.
   POLYGON_MODE {mode}
 ```
 
+```groovy
+  # Set the number of patch control points used by tessellation. The default value is 3.
+  PATCH_CONTROL_POINTS {control_points}
+```
+
 #### Compare operations
  * `never`
  * `less`
@@ -475,6 +494,96 @@ The following commands are all specified within the `PIPELINE` command.
     COMPARE_MASK {compare_mask}
     WRITE_MASK {write_mask}
     REFERENCE {reference}
+  END
+```
+
+#### Blend factors
+* `zero`
+* `one`
+* `src_color`
+* `one_minus_src_color`
+* `dst_color`
+* `one_minus_dst_color`
+* `src_alpha`
+* `one_minus_src_alpha`
+* `dst_alpha`
+* `one_minus_dst_alpha`
+* `constant_color`
+* `one_minus_constant_color`
+* `constant_alpha`
+* `one_minus_constant_alpha`
+* `src_alpha_saturate`
+* `src1_color`
+* `one_minus_src1_color`
+* `src1_alpha`
+* `one_minus_src1_alpha`
+
+#### Blend operations
+* `add`
+* `substract`
+* `reverse_substract`
+* `min`
+* `max`
+
+The following operations also require VK_EXT_blend_operation_advanced
+when using a Vulkan backend.
+* `zero`
+* `src`
+* `dst`
+* `src_over`
+* `dst_over`
+* `src_in`
+* `dst_in`
+* `src_out`
+* `dst_out`
+* `src_atop`
+* `dst_atop`
+* `xor`
+* `multiply`
+* `screen`
+* `overlay`
+* `darken`
+* `lighten`
+* `color_dodge`
+* `color_burn`
+* `hard_light`
+* `soft_light`
+* `difference`
+* `exclusion`
+* `invert`
+* `invert_rgb`
+* `linear_dodge`
+* `linear_burn`
+* `vivid_light`
+* `linear_light`
+* `pin_light`
+* `hard_mix`
+* `hsl_hue`
+* `hsl_saturation`
+* `hsl_color`
+* `hsl_luminosity`
+* `plus`
+* `plus_clamped`
+* `plus_clamped_alpha`
+* `plus_darker`
+* `minus`
+* `minus_clamped`
+* `contrast`
+* `invert_org`
+* `red`
+* `green`
+* `blue`
+
+```groovy
+  # Enable alpha blending and set blend factors and operations. Available
+  # blend factors and operations are listed above.
+  BLEND
+    SRC_COLOR_FACTOR {src_color_factor}
+    DST_COLOR_FACTOR {dst_color_factor}
+    COLOR_OP {color_op}
+    SRC_ALPHA_FACTOR {src_alpha_factor}
+    DST_ALPHA_FACTOR {dst_alpha_factor}
+    ALPHA_OP {alpha_op}
   END
 ```
 
@@ -535,6 +644,11 @@ contain image attachment content, depth/stencil content, uniform buffers, etc.
   # buffer of format `D32_SFLOAT_S8_UINT` will be created for graphics
   # pipelines.
   BIND BUFFER {buffer_name} AS depth_stencil
+
+  # Attach |buffer_name| as a multisample resolve target. The order of resolve
+  # target images match with the order of color attachments that have more than
+  # one sample.
+  BIND BUFFER {buffer_name} AS resolve
 
   # Attach |buffer_name| as the push_constant buffer. There can be only one
   # push constant buffer attached to a pipeline.
