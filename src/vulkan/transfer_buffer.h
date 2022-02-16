@@ -34,17 +34,7 @@ class TransferBuffer : public Resource {
   TransferBuffer(Device* device, uint32_t size_in_bytes, Format* format);
   ~TransferBuffer() override;
 
-  TransferBuffer* AsTransferBuffer() override { return this; }
-  Result AddUsageFlags(VkBufferUsageFlags flags) {
-    if (buffer_ != VK_NULL_HANDLE) {
-      return Result(
-          "Vulkan: TransferBuffer::AddUsageFlags Usage flags can't be changed "
-          "after initializing the buffer.");
-    }
-    usage_flags_ |= flags;
-    return {};
-  }
-  Result Initialize() override;
+  Result Initialize(const VkBufferUsageFlags usage);
   const VkBufferView* GetVkBufferView() const { return &view_; }
 
   VkBuffer GetVkBuffer() const { return buffer_; }
@@ -57,7 +47,6 @@ class TransferBuffer : public Resource {
   void CopyToHost(CommandBuffer* command_buffer) override;
 
  private:
-  VkBufferUsageFlags usage_flags_ = 0;
   VkBuffer buffer_ = VK_NULL_HANDLE;
   VkDeviceMemory memory_ = VK_NULL_HANDLE;
   VkBufferView view_ = VK_NULL_HANDLE;
