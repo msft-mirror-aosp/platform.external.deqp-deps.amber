@@ -44,9 +44,9 @@ TEST_F(VulkanPipelineTest, AddBufferDescriptorAddBufferTwice) {
                                        &amber_pipeline);
   Result r = pipeline.AddBufferDescriptor(cmd.get());
   ASSERT_TRUE(r.IsSuccess()) << r.Error();
-  // Adding same buffer again shouldn't fail.
+  // Adding same buffer again should fail.
   r = pipeline.AddBufferDescriptor(cmd.get());
-  ASSERT_TRUE(r.IsSuccess());
+  ASSERT_FALSE(r.IsSuccess());
 }
 
 }  // namespace vulkan
