@@ -27,10 +27,9 @@ namespace vulkan {
 
 class CommandBuffer;
 class Device;
-class TransferBuffer;
-class TransferImage;
 
-// Class for Vulkan resources. Its children are Vulkan Buffer and Vulkan Image.
+// Class for Vulkan resources. Its children are Vulkan Buffer, Vulkan Image,
+// and a class for push constant.
 class Resource {
  public:
   virtual ~Resource();
@@ -46,12 +45,6 @@ class Resource {
 
   uint32_t GetSizeInBytes() const { return size_in_bytes_; }
   void UpdateMemoryWithRawData(const std::vector<uint8_t>& raw_data);
-
-  bool IsReadOnly() const { return is_read_only_; }
-  void SetReadOnly(bool read_only) { is_read_only_ = read_only; }
-  virtual Result Initialize() = 0;
-  virtual TransferBuffer* AsTransferBuffer() { return nullptr; }
-  virtual TransferImage* AsTransferImage() { return nullptr; }
 
  protected:
   Resource(Device* device, uint32_t size);
@@ -89,7 +82,6 @@ class Resource {
  private:
   uint32_t size_in_bytes_ = 0;
   void* memory_ptr_ = nullptr;
-  bool is_read_only_ = false;
 };
 
 }  // namespace vulkan
