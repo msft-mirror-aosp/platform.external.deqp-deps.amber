@@ -52,30 +52,19 @@ endif()
 if (${AMBER_USE_LOCAL_VULKAN})
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vulkan-headers)
 
-  # Skip adding the validation layers and the Vulkan loader on Android.
-  if (NOT ANDROID)
+  set(BUILD_TESTS FALSE)
 
-    set(BUILD_TESTS FALSE)
-
-    # The vulkan-loader CMake file assumes that directory exists if
-    # Wayland support is to be built.
-    if(NOT EXISTS ${WAYLAND_CLIENT_INCLUDE_DIR})
-      message(STATUS "Amber: Disabling Wayland support in Vulkan-Loader")
-      set(BUILD_WSI_WAYLAND_SUPPORT OFF CACHE BOOL "" FORCE)
-    endif()
-    message(STATUS "Amber: Disabling X11 support in Vulkan-Loader")
-    set(BUILD_WSI_XLIB_SUPPORT OFF CACHE BOOL "" FORCE)
-
-    set(ROBIN_HOOD_HASHING_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/robin-hood-hashing" CACHE STRING "" FORCE)
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/robin-hood-hashing)
-    set(SPIRV_HEADERS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/spirv-headers/include" CACHE STRING "" FORCE)
-
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vulkan-loader)
-    if (MSVC)
-      option(BUILD_WERROR "Treat compiler warnings as errors" OFF)
-    endif()
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vulkan-validationlayers)
+  # The vulkan-loader CMake file assumes that directory exists if
+  # Wayland support is to be built.
+  if(NOT EXISTS ${WAYLAND_CLIENT_INCLUDE_DIR})
+    message(STATUS "Amber: Disabling Wayland support in Vulkan-Loader")
+    set(BUILD_WSI_WAYLAND_SUPPORT OFF CACHE BOOL "" FORCE)
   endif()
+  message(STATUS "Amber: Disabling X11 support in Vulkan-Loader")
+  set(BUILD_WSI_XLIB_SUPPORT OFF CACHE BOOL "" FORCE)
+
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vulkan-loader)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/vulkan-validationlayers)
 endif()
 
 if (${AMBER_ENABLE_VK_DEBUGGING})
@@ -163,8 +152,6 @@ if (${AMBER_ENABLE_CLSPV})
     set(AMBER_CLSPV_LLVM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/clspv-llvm")
   endif()
 
-  list(APPEND CMAKE_MODULE_PATH ${AMBER_CLSPV_LLVM_DIR}/llvm/cmake/modules/)
-
   set(CLSPV_LLVM_SOURCE_DIR "${AMBER_CLSPV_LLVM_DIR}/llvm" CACHE STRING "")
   set(CLSPV_CLANG_SOURCE_DIR "${AMBER_CLSPV_LLVM_DIR}/clang" CACHE STRING "")
   set(SPIRV_HEADERS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/spirv-headers" CACHE STRING "")
@@ -181,8 +168,4 @@ if (${AMBER_ENABLE_CLSPV})
   set(LLVM_INCLUDE_UTILS OFF CACHE BOOL "")
 
   add_subdirectory(${AMBER_CLSPV_DIR} ${CMAKE_CURRENT_BINARY_DIR}/clspv)
-
-  # TODO(asuonpaa): Using the latest LLVM gives multiple warnings of using deprecated
-  # arguments. Remove this when CLSPV doesn't use them.
-  add_compile_options(clspv, NO_DEPRECATED_FLAGS)
 endif()
