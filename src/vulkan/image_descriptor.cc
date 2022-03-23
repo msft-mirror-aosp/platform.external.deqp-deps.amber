@@ -14,10 +14,6 @@
 
 #include "src/vulkan/image_descriptor.h"
 
-#include <algorithm>
-#include <unordered_map>
-#include <utility>
-
 #include "src/vulkan/device.h"
 #include "src/vulkan/resource.h"
 
@@ -29,25 +25,45 @@ ImageDescriptor::ImageDescriptor(Buffer* buffer,
                                  Device* device,
                                  uint32_t base_mip_level,
                                  uint32_t desc_set,
-                                 uint32_t binding,
-                                 Pipeline* pipeline)
-    : BufferBackedDescriptor(buffer, type, device, desc_set, binding, pipeline),
+                                 uint32_t binding)
+    : BufferBackedDescriptor(buffer, type, device, desc_set, binding),
       base_mip_level_(base_mip_level),
       vulkan_sampler_(device) {}
 
 ImageDescriptor::~ImageDescriptor() = default;
 
+Result ImageDescriptor::RecordCopyDataToResourceIfNeeded(
+    CommandBuffer* command) {
+  for (auto& image : transfer_images_) {
+    image->ImageBarrier(command, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT);
+  }
+
+  Result r = BufferBackedDescriptor::RecordCopyDataToResourceIfNeeded(command);
+  if (!r.IsSuccess())
+    return r;
+
+  // Just do this as early as possible.
+  for (auto& image : transfer_images_) {
+    image->ImageBarrier(command, VK_IMAGE_LAYOUT_GENERAL,
+                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+  }
+
+  return {};
+}
+
 Result ImageDescriptor::CreateResourceIfNeeded() {
-  auto& transfer_resources = pipeline_->GetDescriptorTransferResources();
+  if (!transfer_images_.empty()) {
+    return Result(
+        "Vulkan: ImageDescriptor::CreateResourceIfNeeded() must be called "
+        "only when |transfer_images| is empty");
+  }
+
+  transfer_images_.reserve(GetAmberBuffers().size());
 
   for (const auto& amber_buffer : GetAmberBuffers()) {
     if (amber_buffer->ValuePtr()->empty())
       continue;
-
-    // Check if the transfer image is already created.
-    if (transfer_resources.count(amber_buffer) > 0) {
-      continue;
-    }
 
     // Default to 2D image.
     VkImageType image_type = VK_IMAGE_TYPE_2D;
@@ -77,8 +93,14 @@ Result ImageDescriptor::CreateResourceIfNeeded() {
       aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     }
 
+    transfer_images_.emplace_back(MakeUnique<TransferImage>(
+        device_, *fmt, aspect, image_type, amber_buffer->GetWidth(),
+        amber_buffer->GetHeight(), amber_buffer->GetDepth(),
+        amber_buffer->GetMipLevels(), base_mip_level_, VK_REMAINING_MIP_LEVELS,
+        amber_buffer->GetSamples()));
     VkImageUsageFlags usage =
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
     if (type_ == DescriptorType::kStorageImage) {
       usage |= VK_IMAGE_USAGE_STORAGE_BIT;
     } else {
@@ -87,14 +109,10 @@ Result ImageDescriptor::CreateResourceIfNeeded() {
       usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
     }
 
-    auto transfer_image = MakeUnique<TransferImage>(
-        device_, *fmt, aspect, image_type, usage, amber_buffer->GetWidth(),
-        amber_buffer->GetHeight(), amber_buffer->GetDepth(),
-        amber_buffer->GetMipLevels(), base_mip_level_, VK_REMAINING_MIP_LEVELS,
-        amber_buffer->GetSamples());
+    Result r = transfer_images_.back()->Initialize(usage);
 
-    // Store the transfer image to the pipeline's map of transfer images.
-    transfer_resources[amber_buffer] = std::move(transfer_image);
+    if (!r.IsSuccess())
+      return r;
   }
 
   if (amber_sampler_) {
@@ -107,6 +125,27 @@ Result ImageDescriptor::CreateResourceIfNeeded() {
   return {};
 }
 
+Result ImageDescriptor::RecordCopyDataToHost(CommandBuffer* command) {
+  if (!IsReadOnly()) {
+    for (auto& image : transfer_images_) {
+      image->ImageBarrier(command, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                          VK_PIPELINE_STAGE_TRANSFER_BIT);
+    }
+
+    BufferBackedDescriptor::RecordCopyDataToHost(command);
+  }
+
+  return {};
+}
+
+Result ImageDescriptor::MoveResourceToBufferOutput() {
+  Result r = BufferBackedDescriptor::MoveResourceToBufferOutput();
+
+  transfer_images_.clear();
+
+  return r;
+}
+
 void ImageDescriptor::UpdateDescriptorSetIfNeeded(
     VkDescriptorSet descriptor_set) {
   if (!is_descriptor_set_update_needed_)
@@ -117,11 +156,7 @@ void ImageDescriptor::UpdateDescriptorSetIfNeeded(
 
   std::vector<VkDescriptorImageInfo> image_infos;
 
-  // Create VkDescriptorImageInfo for every descriptor image.
-  for (const auto& amber_buffer : GetAmberBuffers()) {
-    const auto& image =
-        pipeline_->GetDescriptorTransferResources()[amber_buffer]
-            ->AsTransferImage();
+  for (const auto& image : transfer_images_) {
     VkDescriptorImageInfo image_info = {vulkan_sampler_.GetVkSampler(),
                                         image->GetVkImageView(), layout};
     image_infos.push_back(image_info);
@@ -140,6 +175,14 @@ void ImageDescriptor::UpdateDescriptorSetIfNeeded(
                                              0, nullptr);
 
   is_descriptor_set_update_needed_ = false;
+}
+
+std::vector<Resource*> ImageDescriptor::GetResources() {
+  std::vector<Resource*> ret;
+  for (auto& i : transfer_images_) {
+    ret.push_back(i.get());
+  }
+  return ret;
 }
 
 }  // namespace vulkan
