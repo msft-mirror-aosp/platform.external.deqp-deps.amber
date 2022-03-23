@@ -17,7 +17,6 @@ third_party/swiftshader
 third_party/vulkan-headers
 third_party/vulkan-loader
 third_party/vulkan-validationlayers/
-third_party/robin-hood-hashing
 .vs
 
 *.pyc
@@ -26,5 +25,5 @@ third_party/robin-hood-hashing
 [._]*.s[a-w][a-z]
 
 # C-Lion
-.idea/
-cmake-build-*/
+.idea
+cmake-build-debug
