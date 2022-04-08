@@ -108,14 +108,6 @@ class EngineStub : public Engine {
     return {};
   }
 
-  Result DoDrawGrid(const DrawGridCommand*) override {
-    did_draw_grid_command_ = true;
-
-    if (fail_draw_grid_command_)
-      return Result("draw grid command failed");
-    return {};
-  }
-
   void FailDrawArraysCommand() { fail_draw_arrays_command_ = true; }
   bool DidDrawArraysCommand() const { return did_draw_arrays_command_; }
   Result DoDrawArrays(const DrawArraysCommand*) override {
@@ -167,18 +159,12 @@ class EngineStub : public Engine {
     return {};
   }
 
-  std::pair<Debugger*, Result> GetDebugger(VirtualFileStore*) override {
-    return {nullptr,
-            Result("EngineStub does not currently support a debugger")};
-  }
-
  private:
   bool fail_clear_command_ = false;
   bool fail_clear_color_command_ = false;
   bool fail_clear_stencil_command_ = false;
   bool fail_clear_depth_command_ = false;
   bool fail_draw_rect_command_ = false;
-  bool fail_draw_grid_command_ = false;
   bool fail_draw_arrays_command_ = false;
   bool fail_compute_command_ = false;
   bool fail_entry_point_command_ = false;
@@ -190,7 +176,6 @@ class EngineStub : public Engine {
   bool did_clear_stencil_command_ = false;
   bool did_clear_depth_command_ = false;
   bool did_draw_rect_command_ = false;
-  bool did_draw_grid_command_ = false;
   bool did_draw_arrays_command_ = false;
   bool did_compute_command_ = false;
   bool did_entry_point_command_ = false;
@@ -207,17 +192,17 @@ class EngineStub : public Engine {
 class VkScriptExecutorTest : public testing::Test {
  public:
   VkScriptExecutorTest() = default;
-  ~VkScriptExecutorTest() override = default;
+  ~VkScriptExecutorTest() = default;
 
   std::unique_ptr<Engine> MakeEngine() { return MakeUnique<EngineStub>(); }
   std::unique_ptr<Engine> MakeAndInitializeEngine(
       const std::vector<std::string>& features,
       const std::vector<std::string>& instance_extensions,
       const std::vector<std::string>& device_extensions) {
-    std::unique_ptr<Engine> engine = MakeUnique<EngineStub>();
+    auto engine = MakeUnique<EngineStub>();
     engine->Initialize(nullptr, nullptr, features, instance_extensions,
                        device_extensions);
-    return engine;
+    return std::move(engine);
   }
   EngineStub* ToStub(Engine* engine) {
     return static_cast<EngineStub*>(engine);
@@ -243,8 +228,7 @@ logicOp)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
 
   const auto& features = ToStub(engine.get())->GetFeatures();
@@ -273,8 +257,7 @@ VK_KHR_variable_pointers)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
 
   const auto& features = ToStub(engine.get())->GetFeatures();
@@ -303,8 +286,7 @@ depthstencil D24_UNORM_S8_UINT)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
 
   const auto& features = ToStub(engine.get())->GetFeatures();
@@ -330,8 +312,7 @@ fence_timeout 12345)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
 
   const auto& features = ToStub(engine.get())->GetFeatures();
@@ -365,8 +346,7 @@ fence_timeout 12345)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
 
   const auto& features = ToStub(engine.get())->GetFeatures();
@@ -396,8 +376,7 @@ clear)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   EXPECT_TRUE(ToStub(engine.get())->DidClearCommand());
 }
@@ -417,8 +396,7 @@ clear)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("clear command failed", r.Error());
 }
@@ -437,8 +415,7 @@ clear color 244 123 123 13)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidClearColorCommand());
 
@@ -467,8 +444,7 @@ clear color 123 123 123 123)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("clear color command failed", r.Error());
 }
@@ -487,8 +463,7 @@ clear depth 24)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidClearDepthCommand());
 }
@@ -508,8 +483,7 @@ clear depth 24)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("clear depth command failed", r.Error());
 }
@@ -528,8 +502,7 @@ clear stencil 24)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidClearStencilCommand());
 }
@@ -549,8 +522,7 @@ clear stencil 24)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("clear stencil command failed", r.Error());
 }
@@ -569,8 +541,7 @@ draw rect 2 4 10 20)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidDrawRectCommand());
 }
@@ -590,8 +561,7 @@ draw rect 2 4 10 20)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("draw rect command failed", r.Error());
 }
@@ -610,8 +580,7 @@ draw arrays TRIANGLE_LIST 0 0)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidDrawArraysCommand());
 }
@@ -631,8 +600,7 @@ draw arrays TRIANGLE_LIST 0 0)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("draw arrays command failed", r.Error());
 }
@@ -651,8 +619,7 @@ compute 2 3 4)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidComputeCommand());
 }
@@ -672,8 +639,7 @@ compute 2 3 4)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("compute command failed", r.Error());
 }
@@ -692,8 +658,7 @@ vertex entrypoint main)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidEntryPointCommand());
 }
@@ -713,8 +678,7 @@ vertex entrypoint main)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("entrypoint command failed", r.Error());
 }
@@ -733,8 +697,7 @@ patch parameter vertices 10)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidPatchParameterVerticesCommand());
 }
@@ -754,8 +717,7 @@ patch parameter vertices 10)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("patch command failed", r.Error());
 }
@@ -773,8 +735,7 @@ probe rect rgba 2 3 40 40 0.2 0.4 0.4 0.3)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   // ASSERT_TRUE(ToStub(engine.get())->DidProbeCommand());
 }
@@ -793,8 +754,7 @@ probe rect rgba 2 3 40 40 0.2 0.4 0.4 0.3)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("probe command failed", r.Error());
 }
@@ -813,8 +773,7 @@ ssbo 0 24)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   ASSERT_TRUE(ToStub(engine.get())->DidBufferCommand());
 }
@@ -834,8 +793,7 @@ ssbo 0 24)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("buffer command failed", r.Error());
 }
@@ -853,8 +811,7 @@ probe ssbo vec3 0 2 <= 2 3 4)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_TRUE(r.IsSuccess());
   // ASSERT_TRUE(ToStub(engine.get())->DidProbeSSBOCommand());
 }
@@ -873,8 +830,7 @@ probe ssbo vec3 0 2 <= 2 3 4)";
 
   Options options;
   Executor ex;
-  Result r =
-      ex.Execute(engine.get(), script.get(), ShaderMap(), &options, nullptr);
+  Result r = ex.Execute(engine.get(), script.get(), ShaderMap(), &options);
   ASSERT_FALSE(r.IsSuccess());
   EXPECT_EQ("probe ssbo command failed", r.Error());
 }

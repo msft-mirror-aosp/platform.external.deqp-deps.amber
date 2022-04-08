@@ -33,18 +33,12 @@ class Shader {
   void SetName(const std::string& name) { name_ = name; }
   const std::string& GetName() const { return name_; }
 
-  void SetFilePath(const std::string& path) { file_path_ = path; }
-  const std::string& GetFilePath() const { return file_path_; }
-
   void SetFormat(ShaderFormat fmt) { shader_format_ = fmt; }
   ShaderFormat GetFormat() const { return shader_format_; }
 
-  void SetTargetEnv(const std::string& env) { target_env_ = env; }
-  const std::string& GetTargetEnv() const { return target_env_; }
-
-  /// Sets the source shader to |data|.
+  /// Sets the compiled shader to |data|.
   void SetData(const std::string& data) { data_ = data; }
-  /// Returns the source shader source.
+  /// Returns the compiled shader source.
   const std::string& GetData() const { return data_; }
 
  private:
@@ -52,8 +46,6 @@ class Shader {
   ShaderFormat shader_format_;
   std::string data_;
   std::string name_;
-  std::string file_path_;
-  std::string target_env_;
 };
 
 }  // namespace amber

@@ -33,12 +33,11 @@ class FrameBuffer {
   FrameBuffer(
       Device* device,
       const std::vector<const amber::Pipeline::BufferInfo*>& color_attachments,
-      amber::Pipeline::BufferInfo depth_stencil_attachment,
       uint32_t width,
       uint32_t height);
   ~FrameBuffer();
 
-  Result Initialize(VkRenderPass render_pass);
+  Result Initialize(VkRenderPass render_pass, const Format* depth_format);
 
   void ChangeFrameToDrawLayout(CommandBuffer* command);
   void ChangeFrameToProbeLayout(CommandBuffer* command);
@@ -52,8 +51,8 @@ class FrameBuffer {
   // Only record the command for copying the image that backs this
   // framebuffer to the host accessible buffer. The actual submission
   // of the command must be done later.
-  void TransferImagesToHost(CommandBuffer* command);
-  void TransferImagesToDevice(CommandBuffer* command);
+  void TransferColorImagesToHost(CommandBuffer* command);
+  void TransferColorImagesToDevice(CommandBuffer* command);
 
   void CopyImagesToBuffers();
   void CopyBuffersToImages();
@@ -70,10 +69,9 @@ class FrameBuffer {
 
   Device* device_ = nullptr;
   std::vector<const amber::Pipeline::BufferInfo*> color_attachments_;
-  amber::Pipeline::BufferInfo depth_stencil_attachment_;
   VkFramebuffer frame_ = VK_NULL_HANDLE;
   std::vector<std::unique_ptr<TransferImage>> color_images_;
-  std::unique_ptr<TransferImage> depth_stencil_image_;
+  std::unique_ptr<TransferImage> depth_image_;
   uint32_t width_ = 0;
   uint32_t height_ = 0;
   uint32_t depth_ = 1;

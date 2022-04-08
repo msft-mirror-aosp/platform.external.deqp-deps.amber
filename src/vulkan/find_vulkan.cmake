@@ -32,6 +32,7 @@ if (NOT ${Vulkan_FOUND})
       CACHE PATH "vk_registry_dir" FORCE)
     set(VulkanRegistry_DIRS ${VulkanRegistry_DIR}
       CACHE PATH "vk_registry_dir" FORCE)
+    include_directories(BEFORE "${VulkanHeaders_INCLUDE_DIR}")
     set(VULKAN_LIB vulkan)
     message(STATUS "Amber: using local vulkan")
   endif()
@@ -46,6 +47,7 @@ if (NOT ${Vulkan_FOUND})
     message(STATUS "Amber: Using Vulkan header dir ${X}")
     list(APPEND CMAKE_REQUIRED_INCLUDES "${X}")
 
+    # Add the directory to the list of include paths, before any others.
     include_directories(BEFORE "${X}")
     CHECK_INCLUDE_FILE(vulkan/vulkan.h HAVE_VULKAN_HEADER)
 
@@ -62,8 +64,6 @@ if (NOT ${Vulkan_FOUND})
       # for the library.
       # TODO(dneto): Actually check for the libraries.
       set(Vulkan_FOUND TRUE)
-      set(VulkanHeaders_INCLUDE_DIR "${X}")
-      set(VulkanHeaders_INCLUDE_DIRS "${VulkanHeaders_INCLUDE_DIR}")
     endif()
   endif()
   unset(X)
@@ -77,13 +77,12 @@ if (NOT ${Vulkan_FOUND})
     message(STATUS "Amber: Using Vulkan header dir ${X}")
     list(APPEND CMAKE_REQUIRED_INCLUDES "${X}")
 
+    # Add the directory to the list of include paths, before any others.
     include_directories(BEFORE "${X}")
 
     if (EXISTS "${X}/vkDefs.h")
       set(VULKAN_CTS_HEADER TRUE)
       set(Vulkan_FOUND TRUE)
-      set(VulkanHeaders_INCLUDE_DIR "${X}")
-      set(VulkanHeaders_INCLUDE_DIRS "${VulkanHeaders_INCLUDE_DIR}")
     endif()
   endif()
   unset(X)
@@ -107,10 +106,8 @@ if (NOT ${Vulkan_FOUND})
       message(STATUS "Amber: Using Vulkan from Vulkan SDK at $ENV{VULKAN_SDK}")
       # Use the imported library target set up by find_package.
       set(VULKAN_LIB Vulkan::Vulkan)
-      set(VulkanHeaders_INCLUDE_DIR "${Vulkan_INCLUDE_DIR}"
-          CACHE PATH "vk headers dir" FORCE)
-      set(VulkanHeaders_INCLUDE_DIRS "${Vulkan_INCLUDE_DIRS}"
-          CACHE PATH "vk headers dir" FORCE)
+      # Add the Vulkan include directory to the list of include paths.
+      include_directories("${Vulkan_INCLUDE_DIRS}")
     endif()
   endif()
 endif()

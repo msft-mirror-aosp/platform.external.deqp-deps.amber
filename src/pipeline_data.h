@@ -28,8 +28,6 @@ class PipelineData {
   ~PipelineData();
   PipelineData(const PipelineData&);
 
-  PipelineData& operator=(const PipelineData&) = default;
-
   void SetTopology(Topology topo) { topology_ = topo; }
   Topology GetTopology() const { return topology_; }
 

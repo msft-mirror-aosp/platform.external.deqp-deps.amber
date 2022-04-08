@@ -1328,10 +1328,6 @@ Result EngineDawn::DoDrawRect(const DrawRectCommand* command) {
   return result;
 }
 
-Result EngineDawn::DoDrawGrid(const DrawGridCommand* command) {
-  return Result("DRAW_GRID not implemented on Dawn");
-}
-
 Result EngineDawn::DoDrawArrays(const DrawArraysCommand* command) {
   Result result;
 
@@ -1620,7 +1616,7 @@ Result EngineDawn::AttachBuffersAndTextures(
   for (const auto& buf_info : render_pipeline->pipeline->GetBuffers()) {
     ::dawn::BufferUsage bufferUsage;
     ::dawn::BindingType bindingType;
-    switch (buf_info.type) {
+    switch (buf_info.buffer->GetBufferType()) {
       case BufferType::kStorage: {
         bufferUsage = ::dawn::BufferUsage::Storage;
         bindingType = ::dawn::BindingType::StorageBuffer;
@@ -1633,7 +1629,8 @@ Result EngineDawn::AttachBuffersAndTextures(
       }
       default: {
         return Result("AttachBuffersAndTextures: unknown buffer type: " +
-                      std::to_string(static_cast<uint32_t>(buf_info.type)));
+                      std::to_string(static_cast<uint32_t>(
+                          buf_info.buffer->GetBufferType())));
         break;
       }
     }
@@ -1719,7 +1716,7 @@ Result EngineDawn::AttachBuffers(ComputePipelineInfo* compute_pipeline) {
   for (const auto& buf_info : compute_pipeline->pipeline->GetBuffers()) {
     ::dawn::BufferUsage bufferUsage;
     ::dawn::BindingType bindingType;
-    switch (buf_info.type) {
+    switch (buf_info.buffer->GetBufferType()) {
       case BufferType::kStorage: {
         bufferUsage = ::dawn::BufferUsage::Storage;
         bindingType = ::dawn::BindingType::StorageBuffer;
@@ -1732,7 +1729,8 @@ Result EngineDawn::AttachBuffers(ComputePipelineInfo* compute_pipeline) {
       }
       default: {
         return Result("AttachBuffers: unknown buffer type: " +
-                      std::to_string(static_cast<uint32_t>(buf_info.type)));
+                      std::to_string(static_cast<uint32_t>(
+                          buf_info.buffer->GetBufferType())));
         break;
       }
     }

@@ -19,7 +19,6 @@
 #include <vector>
 
 #include "amber/result.h"
-#include "spirv-tools/libspirv.h"
 #include "src/pipeline.h"
 
 namespace amber {
@@ -28,8 +27,6 @@ namespace clspvhelper {
 // Passes the OpenCL C source code to Clspv.
 // Returns the generated SPIR-V binary via |generated_binary| argument.
 Result Compile(Pipeline::ShaderInfo* shader_info,
-               Pipeline* pipeline,
-               spv_target_env env,
                std::vector<uint32_t>* generated_binary);
 
 }  // namespace clspvhelper

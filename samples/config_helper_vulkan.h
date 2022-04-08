@@ -44,7 +44,6 @@ class ConfigHelperVulkan : public ConfigHelperImpl {
   amber::Result CreateConfig(
       uint32_t engine_major,
       uint32_t engine_minor,
-      int32_t selected_device,
       const std::vector<std::string>& required_features,
       const std::vector<std::string>& required_instance_extensions,
       const std::vector<std::string>& required_device_extensions,
@@ -64,19 +63,11 @@ class ConfigHelperVulkan : public ConfigHelperImpl {
   /// via debugCallback() function in config_helper_vulkan.cc.
   amber::Result CreateDebugReportCallback();
 
-  /// Check if |physical_device| supports both
-  /// |required_features| and |required_extensions|.
-  amber::Result CheckVulkanPhysicalDeviceRequirements(
-      const VkPhysicalDevice physical_device,
-      const std::vector<std::string>& required_features,
-      const std::vector<std::string>& required_extensions);
-
   /// Choose Vulkan physical device that supports both
   /// |required_features| and |required_extensions|.
   amber::Result ChooseVulkanPhysicalDevice(
       const std::vector<std::string>& required_features,
-      const std::vector<std::string>& required_extensions,
-      const int32_t selected_device);
+      const std::vector<std::string>& required_extensions);
 
   /// Create Vulkan logical device that enables both
   /// |required_features| and |required_extensions|.
@@ -108,18 +99,10 @@ class ConfigHelperVulkan : public ConfigHelperImpl {
   VkQueue vulkan_queue_ = VK_NULL_HANDLE;
   VkDevice vulkan_device_ = VK_NULL_HANDLE;
 
-  bool supports_get_physical_device_properties2_ = false;
-  bool supports_shader_float16_int8_ = false;
-  bool supports_shader_8bit_storage_ = false;
-  bool supports_shader_16bit_storage_ = false;
-  bool supports_subgroup_size_control_ = false;
+  bool use_physical_device_features2_ = false;
   VkPhysicalDeviceFeatures available_features_;
   VkPhysicalDeviceFeatures2KHR available_features2_;
   VkPhysicalDeviceVariablePointerFeaturesKHR variable_pointers_feature_;
-  VkPhysicalDeviceFloat16Int8FeaturesKHR float16_int8_feature_;
-  VkPhysicalDevice8BitStorageFeaturesKHR storage_8bit_feature_;
-  VkPhysicalDevice16BitStorageFeaturesKHR storage_16bit_feature_;
-  VkPhysicalDeviceSubgroupSizeControlFeaturesEXT subgroup_size_control_feature_;
 };
 
 }  // namespace sample

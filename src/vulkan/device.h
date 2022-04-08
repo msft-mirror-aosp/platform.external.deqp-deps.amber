@@ -30,8 +30,7 @@ namespace amber {
 namespace vulkan {
 
 struct VulkanPtrs {
-#include "vk-wrappers-1-0.h"  // NOLINT(build/include)
-#include "vk-wrappers-1-1.h"  // NOLINT(build/include)
+#include "vk-wrappers.h"  // NOLINT(build/include)
 };
 
 /// Wrapper around a Vulkan Device object.
@@ -42,19 +41,19 @@ class Device {
          uint32_t queue_family_index,
          VkDevice device,
          VkQueue queue);
-  virtual ~Device();
+  ~Device();
 
   Result Initialize(PFN_vkGetInstanceProcAddr getInstanceProcAddr,
                     Delegate* delegate,
                     const std::vector<std::string>& required_features,
-                    const std::vector<std::string>& required_device_extensions,
+                    const std::vector<std::string>& required_extensions,
                     const VkPhysicalDeviceFeatures& available_features,
                     const VkPhysicalDeviceFeatures2KHR& available_features2,
                     const std::vector<std::string>& available_extensions);
 
   /// Returns true if |format| and the |buffer|s buffer type combination is
   /// supported by the physical device.
-  bool IsFormatSupportedByPhysicalDevice(const Format& format, BufferType type);
+  bool IsFormatSupportedByPhysicalDevice(const Format& format, Buffer* buffer);
 
   VkDevice GetVkDevice() const { return device_; }
   VkQueue GetVkQueue() const { return queue_; }
@@ -68,37 +67,23 @@ class Device {
   bool IsDescriptorSetInBounds(uint32_t descriptor_set) const;
 
   /// Returns true if the memory at |memory_type_index| has |flags| set.
-  virtual bool HasMemoryFlags(uint32_t memory_type_index,
-                              const VkMemoryPropertyFlags flags) const;
+  bool HasMemoryFlags(uint32_t memory_type_index,
+                      const VkMemoryPropertyFlags flags) const;
   /// Returns true if the memory at |memory_type_index| is host accessible.
   bool IsMemoryHostAccessible(uint32_t memory_type_index) const;
-  /// Returns true if the memory at |memory_type_index| is host coherent.
+  /// Returns true if the memory at |memory_type_index| is host corherent.
   bool IsMemoryHostCoherent(uint32_t memory_type_index) const;
 
   /// Returns the pointers to the Vulkan API methods.
-  virtual const VulkanPtrs* GetPtrs() const { return &ptrs_; }
-
-  /// Returns true if the required subgroup size is supported for given stage
-  bool IsRequiredSubgroupSizeSupported(
-      const ShaderType type,
-      const uint32_t required_subgroup_size) const;
-  /// Returns the minimum required subgroup size or 0 if subgroup size control
-  /// is not supported.
-  uint32_t GetMinSubgroupSize() const;
-  /// Returns the maximum required subgroup size or 0 if subgroup size control
-  /// is not supported.
-  uint32_t GetMaxSubgroupSize() const;
+  const VulkanPtrs* GetPtrs() const { return &ptrs_; }
 
  private:
   Result LoadVulkanPointers(PFN_vkGetInstanceProcAddr, Delegate* delegate);
-  bool SupportsApiVersion(uint32_t major, uint32_t minor, uint32_t patch);
 
   VkInstance instance_ = VK_NULL_HANDLE;
   VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
   VkPhysicalDeviceProperties physical_device_properties_;
   VkPhysicalDeviceMemoryProperties physical_memory_properties_;
-  VkPhysicalDeviceSubgroupSizeControlPropertiesEXT
-      subgroup_size_control_properties_;
   VkDevice device_ = VK_NULL_HANDLE;
   VkQueue queue_ = VK_NULL_HANDLE;
   uint32_t queue_family_index_ = 0;

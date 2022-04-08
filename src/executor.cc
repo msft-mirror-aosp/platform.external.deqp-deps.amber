@@ -15,7 +15,6 @@
 #include "src/executor.h"
 
 #include <cassert>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -35,16 +34,12 @@ Result Executor::CompileShaders(const amber::Script* script,
                                 Options* options) {
   for (auto& pipeline : script->GetPipelines()) {
     for (auto& shader_info : pipeline->GetShaders()) {
-      std::string target_env = shader_info.GetShader()->GetTargetEnv();
-      if (target_env.empty())
-        target_env = script->GetSpvTargetEnv();
-
-      ShaderCompiler sc(target_env, options->disable_spirv_validation,
-                        script->GetVirtualFiles());
+      ShaderCompiler sc(script->GetSpvTargetEnv(),
+                        options->disable_spirv_validation);
 
       Result r;
       std::vector<uint32_t> data;
-      std::tie(r, data) = sc.Compile(pipeline.get(), &shader_info, shader_map);
+      std::tie(r, data) = sc.Compile(&shader_info, shader_map);
       if (!r.IsSuccess())
         return r;
 
@@ -57,8 +52,7 @@ Result Executor::CompileShaders(const amber::Script* script,
 Result Executor::Execute(Engine* engine,
                          const amber::Script* script,
                          const ShaderMap& shader_map,
-                         Options* options,
-                         Delegate* delegate) {
+                         Options* options) {
   engine->SetEngineData(script->GetEngineData());
 
   if (!script->GetPipelines().empty()) {
@@ -74,12 +68,6 @@ Result Executor::Execute(Engine* engine,
       r = pipeline->GenerateOpenCLPodBuffers();
       if (!r.IsSuccess())
         return r;
-      r = pipeline->GenerateOpenCLLiteralSamplers();
-      if (!r.IsSuccess())
-        return r;
-      r = pipeline->GenerateOpenCLPushConstants();
-      if (!r.IsSuccess())
-        return r;
     }
 
     for (auto& pipeline : script->GetPipelines()) {
@@ -92,40 +80,16 @@ Result Executor::Execute(Engine* engine,
   if (options->execution_type == ExecutionType::kPipelineCreateOnly)
     return {};
 
-  Engine::Debugger* debugger = nullptr;
-
   // Process Commands
   for (const auto& cmd : script->GetCommands()) {
-    if (delegate && delegate->LogExecuteCalls()) {
-      delegate->Log(std::to_string(cmd->GetLine()) + ": " + cmd->ToString());
-    }
-
-    auto dbg_script = cmd->GetDebugScript();
-    if (dbg_script != nullptr) {
-      if (debugger == nullptr) {
-        // Lazilly obtain the debugger from the engine.
-        Result res;
-        std::tie(debugger, res) =
-            engine->GetDebugger(script->GetVirtualFiles());
-        if (!res.IsSuccess()) {
-          return res;
-        }
-      }
-      // Run the debugger script on the debugger for this command.
-      // This will run concurrently with the command.
-      dbg_script->Run(debugger);
+    if (options->delegate && options->delegate->LogExecuteCalls()) {
+      options->delegate->Log(std::to_string(cmd->GetLine()) + ": " +
+                             cmd->ToString());
     }
 
     Result r = ExecuteCommand(engine, cmd.get());
     if (!r.IsSuccess())
       return r;
-
-    if (debugger != nullptr) {
-      // Collect the debugger test results.
-      r = debugger->Flush();
-      if (!r.IsSuccess())
-        return r;
-    }
   }
   return {};
 }
@@ -178,8 +142,6 @@ Result Executor::ExecuteCommand(Engine* engine, Command* cmd) {
   }
   if (cmd->IsDrawRect())
     return engine->DoDrawRect(cmd->AsDrawRect());
-  if (cmd->IsDrawGrid())
-    return engine->DoDrawGrid(cmd->AsDrawGrid());
   if (cmd->IsDrawArrays())
     return engine->DoDrawArrays(cmd->AsDrawArrays());
   if (cmd->IsCompute())

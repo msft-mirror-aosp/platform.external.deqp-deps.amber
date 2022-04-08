@@ -18,8 +18,7 @@
 
 namespace amber {
 
-Parser::Parser(Delegate* delegate)
-    : script_(MakeUnique<Script>()), delegate_(delegate) {}
+Parser::Parser() : script_(MakeUnique<Script>()) {}
 
 Parser::~Parser() = default;
 

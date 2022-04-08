@@ -68,7 +68,8 @@ Options::Options()
     : engine(amber::EngineType::kEngineTypeVulkan),
       config(nullptr),
       execution_type(ExecutionType::kExecute),
-      disable_spirv_validation(false) {}
+      disable_spirv_validation(false),
+      delegate(nullptr) {}
 
 Options::~Options() = default;
 
@@ -82,7 +83,7 @@ BufferInfo& BufferInfo::operator=(const BufferInfo&) = default;
 
 Delegate::~Delegate() = default;
 
-Amber::Amber(Delegate* delegate) : delegate_(delegate) {}
+Amber::Amber() = default;
 
 Amber::~Amber() = default;
 
@@ -92,9 +93,9 @@ amber::Result Amber::Parse(const std::string& input, amber::Recipe* recipe) {
 
   std::unique_ptr<Parser> parser;
   if (input.substr(0, 7) == "#!amber")
-    parser = MakeUnique<amberscript::Parser>(GetDelegate());
+    parser = MakeUnique<amberscript::Parser>();
   else
-    parser = MakeUnique<vkscript::Parser>(GetDelegate());
+    parser = MakeUnique<vkscript::Parser>();
 
   Result r = parser->Parse(input);
   if (!r.IsSuccess())
@@ -112,7 +113,6 @@ namespace {
 // pointer is borrowed, and should not be freed.
 Result CreateEngineAndCheckRequirements(const Recipe* recipe,
                                         Options* opts,
-                                        Delegate* delegate,
                                         std::unique_ptr<Engine>* engine_ptr,
                                         Script** script_ptr) {
   if (!recipe)
@@ -131,10 +131,10 @@ Result CreateEngineAndCheckRequirements(const Recipe* recipe,
 
   // Engine initialization checks requirements.  Current backends don't do
   // much else.  Refactor this if they end up doing to much here.
-  Result r =
-      engine->Initialize(opts->config, delegate, script->GetRequiredFeatures(),
-                         script->GetRequiredInstanceExtensions(),
-                         script->GetRequiredDeviceExtensions());
+  Result r = engine->Initialize(opts->config, opts->delegate,
+                                script->GetRequiredFeatures(),
+                                script->GetRequiredInstanceExtensions(),
+                                script->GetRequiredDeviceExtensions());
   if (!r.IsSuccess())
     return r;
 
@@ -150,8 +150,7 @@ amber::Result Amber::AreAllRequirementsSupported(const amber::Recipe* recipe,
   std::unique_ptr<Engine> engine;
   Script* script = nullptr;
 
-  return CreateEngineAndCheckRequirements(recipe, opts, GetDelegate(), &engine,
-                                          &script);
+  return CreateEngineAndCheckRequirements(recipe, opts, &engine, &script);
 }
 
 amber::Result Amber::Execute(const amber::Recipe* recipe, Options* opts) {
@@ -164,15 +163,14 @@ amber::Result Amber::ExecuteWithShaderData(const amber::Recipe* recipe,
                                            const ShaderMap& shader_data) {
   std::unique_ptr<Engine> engine;
   Script* script = nullptr;
-  Result r = CreateEngineAndCheckRequirements(recipe, opts, GetDelegate(),
-                                              &engine, &script);
+  Result r = CreateEngineAndCheckRequirements(recipe, opts, &engine, &script);
   if (!r.IsSuccess())
     return r;
   script->SetSpvTargetEnv(opts->spv_env);
 
   Executor executor;
   Result executor_result =
-      executor.Execute(engine.get(), script, shader_data, opts, GetDelegate());
+      executor.Execute(engine.get(), script, shader_data, opts);
   // Hold the executor result until the extractions are complete. This will let
   // us dump any buffers requested even on failure.
 
@@ -182,37 +180,38 @@ amber::Result Amber::ExecuteWithShaderData(const amber::Recipe* recipe,
     return {};
   }
 
-  // Try to perform each extraction, copying the buffer data into |buffer_info|.
-  // We do not overwrite |executor_result| if extraction fails.
+  // TODO(dsinclair): Figure out how extractions work with multiple pipelines.
+  auto* pipeline = script->GetPipelines()[0].get();
+
+  // The dump process holds onto the results and terminates the loop if any dump
+  // fails. This will allow us to validate |extractor_result| first as if the
+  // extractor fails before running the pipeline that will trigger the dumps
+  // to almost always fail.
   for (BufferInfo& buffer_info : opts->extractions) {
     if (buffer_info.is_image_buffer) {
       auto* buffer = script->GetBuffer(buffer_info.buffer_name);
       if (!buffer)
-        continue;
+        break;
 
       buffer_info.width = buffer->GetWidth();
       buffer_info.height = buffer->GetHeight();
-      GetFrameBuffer(buffer, &(buffer_info.values));
+      r = GetFrameBuffer(buffer, &(buffer_info.values));
+      if (!r.IsSuccess())
+        break;
+
       continue;
     }
 
-    DescriptorSetAndBindingParser p;
-    r = p.Parse(buffer_info.buffer_name);
+    DescriptorSetAndBindingParser desc_set_and_binding_parser;
+    r = desc_set_and_binding_parser.Parse(buffer_info.buffer_name);
     if (!r.IsSuccess())
-      continue;
+      break;
 
-    // Extract the named pipeline from the request, otherwise use the
-    // first pipeline which was parsed.
-    Pipeline* pipeline = nullptr;
-    if (p.HasPipelineName())
-      pipeline = script->GetPipeline(p.PipelineName());
-    else
-      pipeline = script->GetPipelines()[0].get();
-
-    const auto* buffer =
-        pipeline->GetBufferForBinding(p.GetDescriptorSet(), p.GetBinding());
+    const auto* buffer = pipeline->GetBufferForBinding(
+        desc_set_and_binding_parser.GetDescriptorSet(),
+        desc_set_and_binding_parser.GetBinding());
     if (!buffer)
-      continue;
+      break;
 
     const uint8_t* ptr = buffer->ValuePtr()->data();
     auto& values = buffer_info.values;

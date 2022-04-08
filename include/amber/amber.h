@@ -50,7 +50,7 @@ struct EngineConfig {
   virtual ~EngineConfig();
 };
 
-/// Stores information for a buffer.
+/// Stores information for a biffer.
 struct BufferInfo {
   BufferInfo();
   BufferInfo(const BufferInfo&);
@@ -70,18 +70,6 @@ struct BufferInfo {
   std::vector<Value> values;
 };
 
-/// Types of source file to load buffer data from.
-enum class BufferDataFileType : int8_t {
-  /// Unknown file type
-  kUnknown = -1,
-  /// A text file
-  kText = 0,
-  /// A binary file
-  kBinary,
-  /// A PNG file
-  kPng
-};
-
 /// Delegate class for various hook functions
 class Delegate {
  public:
@@ -97,10 +85,6 @@ class Delegate {
   virtual uint64_t GetTimestampNs() const = 0;
   /// Tells whether to log each test as it's executed
   virtual bool LogExecuteCalls() const = 0;
-  /// Loads buffer data from a file
-  virtual amber::Result LoadBufferData(const std::string file_name,
-                                       BufferDataFileType file_type,
-                                       amber::BufferInfo* buffer) const = 0;
 };
 
 /// Stores configuration options for Amber.
@@ -130,12 +114,14 @@ struct Options {
   /// If true, disables SPIR-V validation. If false, SPIR-V shaders will be
   /// validated using the Validator component (spirv-val) from SPIRV-Tools.
   bool disable_spirv_validation;
+  /// Delegate implementation
+  Delegate* delegate;
 };
 
 /// Main interface to the Amber environment.
 class Amber {
  public:
-  explicit Amber(Delegate* delegate);
+  Amber();
   ~Amber();
 
   /// Parse the given |data| into the |recipe|.
@@ -159,12 +145,6 @@ class Amber {
   amber::Result ExecuteWithShaderData(const amber::Recipe* recipe,
                                       Options* opts,
                                       const ShaderMap& shader_data);
-
-  /// Returns the delegate object.
-  Delegate* GetDelegate() const { return delegate_; }
-
- private:
-  Delegate* delegate_;
 };
 
 }  // namespace amber

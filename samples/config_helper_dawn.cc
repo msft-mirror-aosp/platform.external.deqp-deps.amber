@@ -51,7 +51,6 @@ void PrintDeviceError(DawnErrorType errorType, const char* message, void*) {
 amber::Result ConfigHelperDawn::CreateConfig(
     uint32_t,
     uint32_t,
-    int32_t,
     const std::vector<std::string>&,
     const std::vector<std::string>&,
     const std::vector<std::string>&,

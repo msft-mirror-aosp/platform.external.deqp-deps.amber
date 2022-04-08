@@ -36,8 +36,7 @@ class Executor {
   Result Execute(Engine* engine,
                  const Script* script,
                  const ShaderMap& map,
-                 Options* options,
-                 Delegate* delegate);
+                 Options* options);
 
  private:
   Result CompileShaders(const Script* script,

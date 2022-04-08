@@ -35,8 +35,7 @@ const char kDefaultPipelineName[] = "vk_pipeline";
 
 }  // namespace
 
-Parser::Parser() : amber::Parser(nullptr) {}
-Parser::Parser(Delegate* delegate) : amber::Parser(delegate) {}
+Parser::Parser() : amber::Parser() {}
 
 Parser::~Parser() = default;
 
@@ -97,7 +96,7 @@ Result Parser::GenerateDefaultPipeline(const SectionParser& section_parser) {
 
   // Generate and add a framebuffer
   auto color_buf = pipeline->GenerateDefaultColorAttachmentBuffer();
-  r = pipeline->AddColorAttachment(color_buf.get(), 0, 0);
+  r = pipeline->AddColorAttachment(color_buf.get(), 0);
   if (!r.IsSuccess())
     return r;
 
@@ -156,7 +155,7 @@ Result Parser::ProcessRequireBlock(const SectionParser::Section& section) {
        token = tokenizer.NextToken()) {
     if (token->IsEOL())
       continue;
-    if (!token->IsIdentifier()) {
+    if (!token->IsString()) {
       return Result(make_error(
           tokenizer,
           "Invalid token in requirements block: " + token->ToOriginalString()));
@@ -167,7 +166,7 @@ Result Parser::ProcessRequireBlock(const SectionParser::Section& section) {
       script_->AddRequiredFeature(str);
     } else if (str == Pipeline::kGeneratedColorBuffer) {
       token = tokenizer.NextToken();
-      if (!token->IsIdentifier())
+      if (!token->IsString())
         return Result(make_error(tokenizer, "Missing framebuffer format"));
 
       TypeParser type_parser;
@@ -187,7 +186,7 @@ Result Parser::ProcessRequireBlock(const SectionParser::Section& section) {
 
     } else if (str == "depthstencil") {
       token = tokenizer.NextToken();
-      if (!token->IsIdentifier())
+      if (!token->IsString())
         return Result(make_error(tokenizer, "Missing depthStencil format"));
 
       TypeParser type_parser;
@@ -199,17 +198,17 @@ Result Parser::ProcessRequireBlock(const SectionParser::Section& section) {
       }
 
       auto* pipeline = script_->GetPipeline(kDefaultPipelineName);
-      if (pipeline->GetDepthStencilBuffer().buffer != nullptr)
+      if (pipeline->GetDepthBuffer().buffer != nullptr)
         return Result("Only one depthstencil command allowed");
 
       auto fmt = MakeUnique<Format>(type.get());
       // Generate and add a depth buffer
-      auto depth_buf = pipeline->GenerateDefaultDepthStencilAttachmentBuffer();
+      auto depth_buf = pipeline->GenerateDefaultDepthAttachmentBuffer();
       depth_buf->SetFormat(fmt.get());
       script_->RegisterFormat(std::move(fmt));
       script_->RegisterType(std::move(type));
 
-      Result r = pipeline->SetDepthStencilBuffer(depth_buf.get());
+      Result r = pipeline->SetDepthBuffer(depth_buf.get());
       if (!r.IsSuccess())
         return r;
 
@@ -299,7 +298,7 @@ Result Parser::ProcessIndicesBlock(const SectionParser::Section& section) {
     TypeParser parser;
     auto type = parser.Parse("R32_UINT");
     auto fmt = MakeUnique<Format>(type.get());
-    auto b = MakeUnique<Buffer>();
+    auto b = MakeUnique<Buffer>(BufferType::kIndex);
     auto* buf = b.get();
     b->SetName("indices");
     b->SetFormat(fmt.get());
@@ -348,7 +347,7 @@ Result Parser::ProcessVertexDataBlock(const SectionParser::Section& section) {
     uint8_t loc = token->AsUint8();
 
     token = tokenizer.NextToken();
-    if (!token->IsIdentifier()) {
+    if (!token->IsString()) {
       return Result(
           make_error(tokenizer, "Unable to process vertex data header: " +
                                     token->ToOriginalString()));
@@ -434,7 +433,7 @@ Result Parser::ProcessVertexDataBlock(const SectionParser::Section& section) {
 
   auto* pipeline = script_->GetPipeline(kDefaultPipelineName);
   for (size_t i = 0; i < headers.size(); ++i) {
-    auto buffer = MakeUnique<Buffer>();
+    auto buffer = MakeUnique<Buffer>(BufferType::kVertex);
     auto* buf = buffer.get();
     buffer->SetName("Vertices" + std::to_string(i));
     buffer->SetFormat(headers[i].format);
@@ -444,9 +443,7 @@ Result Parser::ProcessVertexDataBlock(const SectionParser::Section& section) {
 
     script_->AddBuffer(std::move(buffer));
 
-    pipeline->AddVertexBuffer(buf, headers[i].location, InputRate::kVertex,
-                              buf->GetFormat(), 0,
-                              buf->GetFormat()->SizeInBytes());
+    pipeline->AddVertexBuffer(buf, headers[i].location);
   }
 
   return {};

@@ -42,7 +42,7 @@ class GraphicsPipeline : public Pipeline {
   GraphicsPipeline(
       Device* device,
       const std::vector<amber::Pipeline::BufferInfo>& color_buffers,
-      amber::Pipeline::BufferInfo depth_stencil_buffer,
+      Format* depth_stencil_format,
       uint32_t fence_timeout_ms,
       const std::vector<VkPipelineShaderStageCreateInfo>&);
   ~GraphicsPipeline() override;
@@ -52,6 +52,8 @@ class GraphicsPipeline : public Pipeline {
   Result SetIndexBuffer(Buffer* buffer);
 
   Result Clear();
+  Result ClearBuffer(const VkClearValue& clear_value,
+                     VkImageAspectFlags aspect);
 
   Result SetClearColor(float r, float g, float b, float a);
   Result SetClearStencil(uint32_t stencil);
@@ -88,7 +90,7 @@ class GraphicsPipeline : public Pipeline {
 
   // color buffers are owned by the amber::Pipeline.
   std::vector<const amber::Pipeline::BufferInfo*> color_buffers_;
-  amber::Pipeline::BufferInfo depth_stencil_buffer_;
+  Format* depth_stencil_format_;
   std::unique_ptr<IndexBuffer> index_buffer_;
 
   uint32_t frame_width_ = 0;

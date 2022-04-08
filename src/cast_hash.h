@@ -15,8 +15,6 @@
 #ifndef SRC_CAST_HASH_H_
 #define SRC_CAST_HASH_H_
 
-#include <cstddef>
-
 namespace amber {
 
 /// A hash implementation for types that can trivially be up-cast to a size_t.

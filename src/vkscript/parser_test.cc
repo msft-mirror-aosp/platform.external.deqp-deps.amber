@@ -131,10 +131,11 @@ TEST_F(VkScriptParserTest, RequireBlockFramebuffer) {
   ASSERT_TRUE(r.IsSuccess());
 
   auto script = parser.GetScript();
-  const auto& bufs = script->GetBuffers();
-  ASSERT_EQ(1U, bufs.size());
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(1U, buffers.size());
+  EXPECT_EQ(BufferType::kColor, buffers[0]->GetBufferType());
   EXPECT_EQ(FormatType::kR32G32B32A32_SFLOAT,
-            bufs[0]->GetFormat()->GetFormatType());
+            buffers[0]->GetFormat()->GetFormatType());
 }
 
 TEST_F(VkScriptParserTest, RequireBlockDepthStencil) {
@@ -146,10 +147,11 @@ TEST_F(VkScriptParserTest, RequireBlockDepthStencil) {
   ASSERT_TRUE(r.IsSuccess()) << r.Error();
 
   auto script = parser.GetScript();
-  const auto& bufs = script->GetBuffers();
-  ASSERT_EQ(2U, bufs.size());
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(2U, buffers.size());
+  EXPECT_EQ(BufferType::kDepth, buffers[1]->GetBufferType());
   EXPECT_EQ(FormatType::kD24_UNORM_S8_UINT,
-            bufs[1]->GetFormat()->GetFormatType());
+            buffers[1]->GetFormat()->GetFormatType());
 }
 
 TEST_F(VkScriptParserTest, RequireFbSize) {
@@ -163,8 +165,8 @@ TEST_F(VkScriptParserTest, RequireFbSize) {
   auto script = parser.GetScript();
   const auto& pipelines = script->GetPipelines();
   ASSERT_EQ(1U, pipelines.size());
-  EXPECT_EQ(300u, pipelines[0]->GetFramebufferWidth());
-  EXPECT_EQ(400u, pipelines[0]->GetFramebufferHeight());
+  EXPECT_EQ(300, pipelines[0]->GetFramebufferWidth());
+  EXPECT_EQ(400, pipelines[0]->GetFramebufferHeight());
 }
 
 TEST_F(VkScriptParserTest, RequireFbSizeMissingSize) {
@@ -229,13 +231,15 @@ inheritedQueries # line comment
   ASSERT_TRUE(r.IsSuccess()) << r.Error();
 
   auto script = parser.GetScript();
-  const auto& bufs = script->GetBuffers();
-  ASSERT_EQ(2U, bufs.size());
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(2U, buffers.size());
+  EXPECT_EQ(BufferType::kColor, buffers[0]->GetBufferType());
   EXPECT_EQ(FormatType::kR32G32B32A32_SFLOAT,
-            bufs[0]->GetFormat()->GetFormatType());
+            buffers[0]->GetFormat()->GetFormatType());
 
+  EXPECT_EQ(BufferType::kDepth, buffers[1]->GetBufferType());
   EXPECT_EQ(FormatType::kD24_UNORM_S8_UINT,
-            bufs[1]->GetFormat()->GetFormatType());
+            buffers[1]->GetFormat()->GetFormatType());
 
   auto feats = script->GetRequiredFeatures();
   EXPECT_EQ("sparseResidency4Samples", feats[0]);
@@ -251,18 +255,21 @@ TEST_F(VkScriptParserTest, IndicesBlock) {
   ASSERT_TRUE(r.IsSuccess()) << r.Error();
 
   auto script = parser.GetScript();
-  const auto& bufs = script->GetBuffers();
-  ASSERT_EQ(2U, bufs.size());
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(2U, buffers.size());
+  ASSERT_EQ(BufferType::kIndex, buffers[1]->GetBufferType());
 
-  EXPECT_TRUE(bufs[1]->GetFormat()->IsUint32());
-  EXPECT_EQ(3U, bufs[1]->ElementCount());
-  EXPECT_EQ(3U, bufs[1]->ValueCount());
-  EXPECT_EQ(3U * sizeof(uint32_t), bufs[1]->GetSizeInBytes());
+  auto buffer_ptr = buffers[1].get();
+  auto buffer = buffer_ptr;
+  EXPECT_TRUE(buffer->GetFormat()->IsUint32());
+  EXPECT_EQ(3U, buffer->ElementCount());
+  EXPECT_EQ(3U, buffer->ValueCount());
+  EXPECT_EQ(3U * sizeof(uint32_t), buffer->GetSizeInBytes());
 
-  const auto* data = bufs[1]->GetValues<uint32_t>();
-  EXPECT_EQ(1u, data[0]);
-  EXPECT_EQ(2u, data[1]);
-  EXPECT_EQ(3u, data[2]);
+  const auto* data = buffer->GetValues<uint32_t>();
+  EXPECT_EQ(1, data[0]);
+  EXPECT_EQ(2, data[1]);
+  EXPECT_EQ(3, data[2]);
 }
 
 TEST_F(VkScriptParserTest, IndicesBlockMultipleLines) {
@@ -279,12 +286,13 @@ TEST_F(VkScriptParserTest, IndicesBlockMultipleLines) {
   ASSERT_TRUE(r.IsSuccess()) << r.Error();
 
   auto script = parser.GetScript();
-  const auto& bufs = script->GetBuffers();
-  ASSERT_EQ(2U, bufs.size());
+  auto& buffers = script->GetBuffers();
+  ASSERT_EQ(2U, buffers.size());
+  ASSERT_EQ(buffers[1]->GetBufferType(), BufferType::kIndex);
 
-  const auto* data = bufs[1]->GetValues<uint32_t>();
+  const auto* data = buffers[1]->GetValues<uint32_t>();
   std::vector<uint16_t> results = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
-  ASSERT_EQ(results.size(), bufs[1]->ValueCount());
+  ASSERT_EQ(results.size(), buffers[1]->ValueCount());
   for (size_t i = 0; i < results.size(); ++i) {
     EXPECT_EQ(results[i], data[i]);
   }
@@ -329,8 +337,8 @@ TEST_F(VkScriptParserTest, VertexDataHeaderFormatString) {
   ASSERT_TRUE(r.IsSuccess()) << r.Error();
 
   auto script = parser.GetScript();
-  const auto& bufs = script->GetBuffers();
-  ASSERT_EQ(3U, bufs.size());
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(3U, buffers.size());
 
   ASSERT_EQ(1U, script->GetPipelines().size());
   const auto* pipeline = script->GetPipelines()[0].get();
@@ -338,14 +346,17 @@ TEST_F(VkScriptParserTest, VertexDataHeaderFormatString) {
   ASSERT_EQ(2U, pipeline->GetVertexBuffers().size());
   const auto& pipeline_buffers = pipeline->GetVertexBuffers();
 
+  ASSERT_EQ(BufferType::kVertex, buffers[1]->GetBufferType());
   EXPECT_EQ(static_cast<uint8_t>(0U), pipeline_buffers[0].location);
-  EXPECT_EQ(FormatType::kR32G32_SFLOAT, bufs[1]->GetFormat()->GetFormatType());
-  EXPECT_EQ(static_cast<uint32_t>(0), bufs[1]->ElementCount());
+  EXPECT_EQ(FormatType::kR32G32_SFLOAT,
+            buffers[1]->GetFormat()->GetFormatType());
+  EXPECT_EQ(static_cast<uint32_t>(0), buffers[1]->ElementCount());
 
+  ASSERT_EQ(BufferType::kVertex, buffers[2]->GetBufferType());
   EXPECT_EQ(1U, pipeline_buffers[1].location);
   EXPECT_EQ(FormatType::kA8B8G8R8_UNORM_PACK32,
-            bufs[2]->GetFormat()->GetFormatType());
-  EXPECT_EQ(static_cast<uint32_t>(0), bufs[2]->ElementCount());
+            buffers[2]->GetFormat()->GetFormatType());
+  EXPECT_EQ(static_cast<uint32_t>(0), buffers[2]->ElementCount());
 }
 
 TEST_F(VkScriptParserTest, VertexDataHeaderGlslString) {
@@ -357,8 +368,8 @@ TEST_F(VkScriptParserTest, VertexDataHeaderGlslString) {
   ASSERT_TRUE(r.IsSuccess()) << r.Error();
 
   auto script = parser.GetScript();
-  const auto& bufs = script->GetBuffers();
-  ASSERT_EQ(3U, bufs.size());
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(3U, buffers.size());
 
   ASSERT_EQ(1U, script->GetPipelines().size());
   const auto* pipeline = script->GetPipelines()[0].get();
@@ -366,26 +377,30 @@ TEST_F(VkScriptParserTest, VertexDataHeaderGlslString) {
   ASSERT_EQ(2U, pipeline->GetVertexBuffers().size());
   const auto& pipeline_buffers = pipeline->GetVertexBuffers();
 
+  ASSERT_EQ(BufferType::kVertex, buffers[1]->GetBufferType());
   EXPECT_EQ(static_cast<uint8_t>(0U), pipeline_buffers[0].location);
 
-  EXPECT_EQ(FormatType::kR32G32_SFLOAT, bufs[1]->GetFormat()->GetFormatType());
+  EXPECT_EQ(FormatType::kR32G32_SFLOAT,
+            buffers[1]->GetFormat()->GetFormatType());
 
-  auto& segs1 = bufs[1]->GetFormat()->GetSegments();
+  auto& segs1 = buffers[1]->GetFormat()->GetSegments();
   ASSERT_EQ(2U, segs1.size());
   EXPECT_EQ(FormatMode::kSFloat, segs1[0].GetFormatMode());
   EXPECT_EQ(FormatMode::kSFloat, segs1[1].GetFormatMode());
-  EXPECT_EQ(static_cast<uint32_t>(0), bufs[1]->ElementCount());
+  EXPECT_EQ(static_cast<uint32_t>(0), buffers[1]->ElementCount());
 
+  ASSERT_EQ(BufferType::kVertex, buffers[2]->GetBufferType());
   EXPECT_EQ(1U, pipeline_buffers[1].location);
-  EXPECT_EQ(FormatType::kR32G32B32_SINT, bufs[2]->GetFormat()->GetFormatType());
+  EXPECT_EQ(FormatType::kR32G32B32_SINT,
+            buffers[2]->GetFormat()->GetFormatType());
 
-  auto& segs2 = bufs[2]->GetFormat()->GetSegments();
-  ASSERT_EQ(4u, segs2.size());
+  auto& segs2 = buffers[2]->GetFormat()->GetSegments();
+  ASSERT_EQ(4, segs2.size());
   EXPECT_EQ(FormatMode::kSInt, segs2[0].GetFormatMode());
   EXPECT_EQ(FormatMode::kSInt, segs2[1].GetFormatMode());
   EXPECT_EQ(FormatMode::kSInt, segs2[2].GetFormatMode());
   EXPECT_TRUE(segs2[3].IsPadding());
-  EXPECT_EQ(static_cast<uint32_t>(0), bufs[2]->ElementCount());
+  EXPECT_EQ(static_cast<uint32_t>(0), buffers[2]->ElementCount());
 }
 
 TEST_F(VkScriptParserTest, TestBlock) {
@@ -435,17 +450,21 @@ TEST_F(VkScriptParserTest, VertexDataRows) {
   ASSERT_TRUE(r.IsSuccess()) << r.Error();
 
   auto script = parser.GetScript();
-  const auto& bufs = script->GetBuffers();
-  ASSERT_EQ(3U, bufs.size());
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(3U, buffers.size());
+
+  ASSERT_EQ(BufferType::kVertex, buffers[1]->GetBufferType());
 
   std::vector<float> seg_0 = {-1.f, -1.f, 0.25f, 0, 0.25f, -1.f, 0.25f, 0};
-  const auto* values_0 = bufs[1]->GetValues<float>();
+  const auto* values_0 = buffers[1]->GetValues<float>();
   for (size_t i = 0; i < seg_0.size(); ++i) {
     EXPECT_FLOAT_EQ(seg_0[i], values_0[i]);
   }
 
+  ASSERT_EQ(BufferType::kVertex, buffers[2]->GetBufferType());
+
   std::vector<uint8_t> seg_1 = {255, 128, 1, 0, 255, 128, 255, 0};
-  const auto* values_1 = bufs[2]->GetValues<uint8_t>();
+  const auto* values_1 = buffers[2]->GetValues<uint8_t>();
   for (size_t i = 0; i < seg_1.size(); ++i) {
     EXPECT_EQ(seg_1[i], values_1[i]);
   }
@@ -490,12 +509,13 @@ TEST_F(VkScriptParserTest, VertexDataRowsWithHex) {
   ASSERT_TRUE(r.IsSuccess()) << r.Error();
 
   auto script = parser.GetScript();
-  const auto& bufs = script->GetBuffers();
-  ASSERT_EQ(2U, bufs.size());
+  const auto& buffers = script->GetBuffers();
+  ASSERT_EQ(2U, buffers.size());
+  ASSERT_EQ(BufferType::kVertex, buffers[1]->GetBufferType());
 
   std::vector<uint32_t> seg_0 = {0xff0000ff, 0xffff0000};
-  const auto* values_0 = bufs[1]->GetValues<uint32_t>();
-  ASSERT_EQ(seg_0.size(), bufs[1]->ValueCount());
+  const auto* values_0 = buffers[1]->GetValues<uint32_t>();
+  ASSERT_EQ(seg_0.size(), buffers[1]->ValueCount());
 
   for (size_t i = 0; i < seg_0.size(); ++i) {
     EXPECT_EQ(seg_0[i], values_0[i]);
