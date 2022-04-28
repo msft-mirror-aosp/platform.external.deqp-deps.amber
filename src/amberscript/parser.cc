@@ -622,6 +622,10 @@ Result Parser::ParsePipelineBody(const std::string& cmd_name,
       r = ParsePipelineStencil(pipeline.get());
     } else if (tok == "SUBGROUP") {
       r = ParsePipelineSubgroup(pipeline.get());
+    } else if (tok == "PATCH_CONTROL_POINTS") {
+      r = ParsePipelinePatchControlPoints(pipeline.get());
+    } else if (tok == "BLEND") {
+      r = ParsePipelineBlend(pipeline.get());
     } else {
       r = Result("unknown token in pipeline block: " + tok);
     }
@@ -931,6 +935,20 @@ Result Parser::ParsePipelineSubgroup(Pipeline* pipeline) {
   return ValidateEndOfStatement("SUBGROUP command");
 }
 
+Result Parser::ParsePipelinePatchControlPoints(Pipeline* pipeline) {
+  auto token = tokenizer_->NextToken();
+  if (token->IsEOL() || token->IsEOS())
+    return Result(
+        "missing number of control points in PATCH_CONTROL_POINTS command");
+
+  if (!token->IsInteger())
+    return Result("expecting integer for the number of control points");
+
+  pipeline->GetPipelineData()->SetPatchControlPoints(token->AsUint32());
+
+  return ValidateEndOfStatement("PATCH_CONTROL_POINTS command");
+}
+
 Result Parser::ParsePipelineFramebufferSize(Pipeline* pipeline) {
   auto token = tokenizer_->NextToken();
   if (token->IsEOL() || token->IsEOS())
@@ -1046,6 +1064,8 @@ Result Parser::ToBufferType(const std::string& name, BufferType* type) {
     *type = BufferType::kUniformTexelBuffer;
   else if (name == "storage_texel_buffer")
     *type = BufferType::kStorageTexelBuffer;
+  else if (name == "resolve")
+    *type = BufferType::kResolve;
   else
     return Result("unknown buffer_type: " + name);
 
@@ -1160,6 +1180,8 @@ Result Parser::ParsePipelineBind(Pipeline* pipeline) {
 
         for (auto& buf : buffers)
           buf->SetSampler(sampler);
+      } else if (buffer_type == BufferType::kResolve) {
+        r = pipeline->AddResolveTarget(buffer);
       }
     }
 
@@ -1841,6 +1863,98 @@ Result Parser::ParsePipelineStencil(Pipeline* pipeline) {
   }
 
   return ValidateEndOfStatement("STENCIL command");
+}
+
+Result Parser::ParsePipelineBlend(Pipeline* pipeline) {
+  pipeline->GetPipelineData()->SetEnableBlend(true);
+
+  while (true) {
+    auto token = tokenizer_->NextToken();
+    if (token->IsEOL())
+      continue;
+    if (token->IsEOS())
+      return Result("BLEND missing END command");
+    if (!token->IsIdentifier())
+      return Result("BLEND options must be identifiers");
+    if (token->AsString() == "END")
+      break;
+
+    if (token->AsString() == "SRC_COLOR_FACTOR") {
+      token = tokenizer_->NextToken();
+
+      if (!token->IsIdentifier())
+        return Result("BLEND invalid value for SRC_COLOR_FACTOR");
+
+      const auto factor = NameToBlendFactor(token->AsString());
+      if (factor == BlendFactor::kUnknown)
+        return Result("BLEND invalid value for SRC_COLOR_FACTOR: " +
+                      token->AsString());
+      pipeline->GetPipelineData()->SetSrcColorBlendFactor(
+          NameToBlendFactor(token->AsString()));
+    } else if (token->AsString() == "DST_COLOR_FACTOR") {
+      token = tokenizer_->NextToken();
+
+      if (!token->IsIdentifier())
+        return Result("BLEND invalid value for DST_COLOR_FACTOR");
+
+      const auto factor = NameToBlendFactor(token->AsString());
+      if (factor == BlendFactor::kUnknown)
+        return Result("BLEND invalid value for DST_COLOR_FACTOR: " +
+                      token->AsString());
+      pipeline->GetPipelineData()->SetDstColorBlendFactor(
+          NameToBlendFactor(token->AsString()));
+    } else if (token->AsString() == "SRC_ALPHA_FACTOR") {
+      token = tokenizer_->NextToken();
+
+      if (!token->IsIdentifier())
+        return Result("BLEND invalid value for SRC_ALPHA_FACTOR");
+
+      const auto factor = NameToBlendFactor(token->AsString());
+      if (factor == BlendFactor::kUnknown)
+        return Result("BLEND invalid value for SRC_ALPHA_FACTOR: " +
+                      token->AsString());
+      pipeline->GetPipelineData()->SetSrcAlphaBlendFactor(
+          NameToBlendFactor(token->AsString()));
+    } else if (token->AsString() == "DST_ALPHA_FACTOR") {
+      token = tokenizer_->NextToken();
+
+      if (!token->IsIdentifier())
+        return Result("BLEND invalid value for DST_ALPHA_FACTOR");
+
+      const auto factor = NameToBlendFactor(token->AsString());
+      if (factor == BlendFactor::kUnknown)
+        return Result("BLEND invalid value for DST_ALPHA_FACTOR: " +
+                      token->AsString());
+      pipeline->GetPipelineData()->SetDstAlphaBlendFactor(
+          NameToBlendFactor(token->AsString()));
+    } else if (token->AsString() == "COLOR_OP") {
+      token = tokenizer_->NextToken();
+
+      if (!token->IsIdentifier())
+        return Result("BLEND invalid value for COLOR_OP");
+
+      const auto op = NameToBlendOp(token->AsString());
+      if (op == BlendOp::kUnknown)
+        return Result("BLEND invalid value for COLOR_OP: " + token->AsString());
+      pipeline->GetPipelineData()->SetColorBlendOp(
+          NameToBlendOp(token->AsString()));
+    } else if (token->AsString() == "ALPHA_OP") {
+      token = tokenizer_->NextToken();
+
+      if (!token->IsIdentifier())
+        return Result("BLEND invalid value for ALPHA_OP");
+
+      const auto op = NameToBlendOp(token->AsString());
+      if (op == BlendOp::kUnknown)
+        return Result("BLEND invalid value for ALPHA_OP: " + token->AsString());
+      pipeline->GetPipelineData()->SetAlphaBlendOp(
+          NameToBlendOp(token->AsString()));
+    } else {
+      return Result("BLEND invalid value for BLEND: " + token->AsString());
+    }
+  }
+
+  return ValidateEndOfStatement("BLEND command");
 }
 
 Result Parser::ParseStruct() {
