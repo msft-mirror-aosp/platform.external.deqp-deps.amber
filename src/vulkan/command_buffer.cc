@@ -15,6 +15,7 @@
 #include "src/vulkan/command_buffer.h"
 
 #include <cassert>
+#include <string>
 
 #include "src/vulkan/command_pool.h"
 #include "src/vulkan/device.h"
@@ -72,7 +73,8 @@ Result CommandBuffer::BeginRecording() {
   return {};
 }
 
-Result CommandBuffer::SubmitAndReset(uint32_t timeout_ms) {
+Result CommandBuffer::SubmitAndReset(uint32_t timeout_ms,
+  bool pipeline_runtime_layer_enabled) {
   if (device_->GetPtrs()->vkEndCommandBuffer(command_) != VK_SUCCESS)
     return Result("Vulkan::Calling vkEndCommandBuffer Fail");
 
@@ -97,8 +99,33 @@ Result CommandBuffer::SubmitAndReset(uint32_t timeout_ms) {
       static_cast<uint64_t>(timeout_ms) * 1000ULL * 1000ULL /* nanosecond */);
   if (r == VK_TIMEOUT)
     return Result("Vulkan::Calling vkWaitForFences Timeout");
-  if (r != VK_SUCCESS)
-    return Result("Vulkan::Calling vkWaitForFences Fail");
+  if (r != VK_SUCCESS) {
+    std::string result_str;
+    switch (r) {
+      case VK_ERROR_OUT_OF_HOST_MEMORY:
+        result_str = "OUT_OF_HOST_MEMORY";
+        break;
+      case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+        result_str = "OUT_OF_DEVICE_MEMORY";
+        break;
+      case VK_ERROR_DEVICE_LOST:
+        result_str = "DEVICE_LOST";
+        break;
+      default:
+        result_str = "<UNEXPECTED RESULT>";
+        break;
+    }
+    return Result("Vulkan::Calling vkWaitForFences Fail (" + result_str + ")");
+  }
+
+    /*
+  google/vulkan-performance-layers requires a call to vkDeviceWaitIdle or
+  vkQueueWaitIdle in order to report the information. Since we want to be
+  able to use that layer in conjunction with Amber we need to somehow
+  communicate that the Amber script has completed.
+  */
+  if (pipeline_runtime_layer_enabled)
+    device_->GetPtrs()->vkQueueWaitIdle(device_->GetVkQueue());
 
   if (device_->GetPtrs()->vkResetCommandBuffer(command_, 0) != VK_SUCCESS)
     return Result("Vulkan::Calling vkResetCommandBuffer Fail");
@@ -124,9 +151,10 @@ CommandBufferGuard::~CommandBufferGuard() {
     buffer_->Reset();
 }
 
-Result CommandBufferGuard::Submit(uint32_t timeout_ms) {
+Result CommandBufferGuard::Submit(uint32_t timeout_ms,
+  bool pipeline_runtime_layer_enabled) {
   assert(buffer_->guarded_);
-  return buffer_->SubmitAndReset(timeout_ms);
+  return buffer_->SubmitAndReset(timeout_ms, pipeline_runtime_layer_enabled);
 }
 
 }  // namespace vulkan

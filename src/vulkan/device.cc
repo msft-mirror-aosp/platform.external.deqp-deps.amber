@@ -83,6 +83,12 @@ const char kSubgroupSupportedStagesFragment[] =
 const char kSubgroupSupportedStagesCompute[] =
     "SubgroupSupportedStages.compute";
 
+const char kShaderSubgroupExtendedTypes[] =
+    "ShaderSubgroupExtendedTypesFeatures.shaderSubgroupExtendedTypes";
+
+const char kIndexTypeUint8[] =
+    "IndexTypeUint8Features.indexTypeUint8";
+
 struct BaseOutStructure {
   VkStructureType sType;
   void* pNext;
@@ -470,6 +476,9 @@ Result Device::Initialize(
   VkPhysicalDeviceVulkan13Features* vulkan13_ptrs = nullptr;
   VkPhysicalDeviceSubgroupSizeControlFeaturesEXT*
       subgroup_size_control_features = nullptr;
+  VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures*
+      shader_subgroup_extended_types_ptrs = nullptr;
+  VkPhysicalDeviceIndexTypeUint8FeaturesEXT* index_type_uint8_ptrs = nullptr;
   void* ptr = available_features2.pNext;
   while (ptr != nullptr) {
     BaseOutStructure* s = static_cast<BaseOutStructure*>(ptr);
@@ -493,6 +502,16 @@ Result Device::Initialize(
       case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES_EXT:
         subgroup_size_control_features =
             static_cast<VkPhysicalDeviceSubgroupSizeControlFeaturesEXT*>(ptr);
+        break;
+      // NOLINTNEXTLINE(whitespace/line_length)
+      case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES:
+        shader_subgroup_extended_types_ptrs =
+            static_cast<VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures*>(
+                ptr);
+        break;
+      case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES_EXT:
+        index_type_uint8_ptrs =
+            static_cast<VkPhysicalDeviceIndexTypeUint8FeaturesEXT*>(ptr);
         break;
       case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES:
         vulkan11_ptrs = static_cast<VkPhysicalDeviceVulkan11Features*>(ptr);
@@ -550,6 +569,19 @@ Result Device::Initialize(
         subgroup_size_control_features == nullptr && vulkan13_ptrs == nullptr) {
       return amber::Result("Missing subgroup size control features");
     }
+    if (feature == kShaderSubgroupExtendedTypes &&
+        shader_subgroup_extended_types_ptrs == nullptr &&
+        vulkan12_ptrs == nullptr) {
+      return amber::Result(
+          "Subgroup extended types requested but feature not returned");
+    }
+    if (feature == kIndexTypeUint8 &&
+        (index_type_uint8_ptrs == nullptr ||
+         index_type_uint8_ptrs->indexTypeUint8 != VK_TRUE)) {
+      return amber::Result(
+          "Index type uint8_t requested but feature not returned");
+    }
+
 
     // Next check the fields of the feature structures.
 
@@ -632,6 +664,10 @@ Result Device::Initialize(
           vulkan12_ptrs->storagePushConstant8 != VK_TRUE) {
         return amber::Result("Missing 8-bit push constant access");
       }
+      if (feature == kShaderSubgroupExtendedTypes &&
+          vulkan12_ptrs->shaderSubgroupExtendedTypes != VK_TRUE) {
+        return amber::Result("Missing subgroup extended types");
+      }
     } else {
       // Vulkan 1.2 structure was not found. Use separate structures per each
       // feature.
@@ -653,6 +689,11 @@ Result Device::Initialize(
       if (feature == k8BitStorage_PushConstant &&
           storage8_ptrs->storagePushConstant8 != VK_TRUE) {
         return amber::Result("Missing 8-bit push constant access");
+      }
+      if (feature == kShaderSubgroupExtendedTypes &&
+          shader_subgroup_extended_types_ptrs->shaderSubgroupExtendedTypes !=
+              VK_TRUE) {
+        return amber::Result("Missing subgroup extended types");
       }
     }
 

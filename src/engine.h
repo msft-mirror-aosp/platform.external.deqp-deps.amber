@@ -35,6 +35,7 @@ class VirtualFileStore;
 struct EngineData {
   /// The timeout to use for fences, in milliseconds.
   uint32_t fence_timeout_ms = 10000;
+  bool pipeline_runtime_layer_enabled = false;
 };
 
 /// Abstract class which describes a backing engine for Amber.
@@ -56,16 +57,6 @@ struct EngineData {
 ///  5. Engine destructor is called.
 class Engine {
  public:
-  /// Debugger is the interface to the engine's shader debugger.
-  class Debugger : public debug::Events {
-   public:
-    ~Debugger() override;
-
-    /// Flush waits for all the debugger commands issued to complete, and
-    /// returns a Result that includes any debugger test failure.
-    virtual Result Flush() = 0;
-  };
-
   /// Creates a new engine of the requested |type|.
   static std::unique_ptr<Engine> Create(EngineType type);
 
@@ -121,11 +112,6 @@ class Engine {
   /// This declares an Amber buffer to be bound to a descriptor.
   /// This covers both Vulkan buffers and images.
   virtual Result DoBuffer(const BufferCommand* cmd) = 0;
-
-  /// GetDebugger returns the shader debugger from the engine.
-  /// If the engine does not support a shader debugger then the Result will be a
-  /// failure.
-  virtual std::pair<Debugger*, Result> GetDebugger(VirtualFileStore*) = 0;
 
   /// Sets the engine data to use.
   void SetEngineData(const EngineData& data) { engine_data_ = data; }
