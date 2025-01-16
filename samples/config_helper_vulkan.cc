@@ -72,6 +72,13 @@ const char kComputeFullSubgroups[] = "SubgroupSizeControl.computeFullSubgroups";
 const char kShaderSubgroupExtendedTypes[] =
     "ShaderSubgroupExtendedTypesFeatures.shaderSubgroupExtendedTypes";
 
+const char kAccelerationStructure[] =
+    "AccelerationStructureFeaturesKHR.accelerationStructure";
+const char kBufferDeviceAddress[] =
+    "BufferDeviceAddressFeatures.bufferDeviceAddress";
+const char kRayTracingPipeline[] =
+    "RayTracingPipelineFeaturesKHR.rayTracingPipeline";
+
 const char kExtensionForValidationLayer[] = "VK_EXT_debug_report";
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugReportFlagsEXT flag,
@@ -649,7 +656,13 @@ ConfigHelperVulkan::ConfigHelperVulkan()
       storage_8bit_feature_(VkPhysicalDevice8BitStorageFeaturesKHR()),
       storage_16bit_feature_(VkPhysicalDevice16BitStorageFeaturesKHR()),
       subgroup_size_control_feature_(
-          VkPhysicalDeviceSubgroupSizeControlFeaturesEXT()) {}
+          VkPhysicalDeviceSubgroupSizeControlFeaturesEXT()),
+      acceleration_structure_feature_(
+          VkPhysicalDeviceAccelerationStructureFeaturesKHR()),
+      buffer_device_address_feature_(
+          VkPhysicalDeviceBufferDeviceAddressFeatures()),
+      ray_tracing_pipeline_feature_(
+          VkPhysicalDeviceRayTracingPipelineFeaturesKHR()) {}
 
 ConfigHelperVulkan::~ConfigHelperVulkan() {
   if (vulkan_device_)
@@ -793,6 +806,14 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
       supports_subgroup_size_control_ = true;
     else if (ext == "VK_KHR_shader_subgroup_extended_types")
       supports_shader_subgroup_extended_types_ = true;
+    else if (ext == "VK_KHR_variable_pointers")
+      supports_variable_pointers_ = true;
+    else if (ext == "VK_KHR_acceleration_structure")
+      supports_acceleration_structure_ = true;
+    else if (ext == "VK_KHR_buffer_device_address")
+      supports_buffer_device_address_ = true;
+    else if (ext == "VK_KHR_ray_tracing_pipeline")
+      supports_ray_tracing_pipeline_ = true;
   }
 
   VkPhysicalDeviceFeatures required_vulkan_features =
@@ -807,39 +828,71 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
     VkPhysicalDeviceFloat16Int8FeaturesKHR float16_int8_features = {};
     VkPhysicalDevice8BitStorageFeaturesKHR storage_8bit_features = {};
     VkPhysicalDevice16BitStorageFeaturesKHR storage_16bit_features = {};
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR
+        acceleration_structure_features = {};
+    VkPhysicalDeviceBufferDeviceAddressFeatures buffer_device_address_features =
+        {};
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR
+        ray_tracing_pipeline_features = {};
+    void* next_ptr = nullptr;
 
-    subgroup_size_control_features.sType =
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES_EXT;
-    subgroup_size_control_features.pNext = nullptr;
+    if (supports_subgroup_size_control_) {
+      subgroup_size_control_features.sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES_EXT;
+      subgroup_size_control_features.pNext = next_ptr;
+      next_ptr = &subgroup_size_control_features;
+    }
 
-    // Add subgroup size control struct into the chain only if
-    // VK_EXT_subgroup_size_control is supported.
     variable_pointers_features.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTER_FEATURES_KHR;
-    variable_pointers_features.pNext = supports_subgroup_size_control_
-                                           ? &subgroup_size_control_features
-                                           : nullptr;
+    variable_pointers_features.pNext = next_ptr;
+    next_ptr = &variable_pointers_features;
 
     shader_subgroup_extended_types_features.sType =
         // NOLINTNEXTLINE(whitespace/line_length)
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES;
-    shader_subgroup_extended_types_features.pNext = &variable_pointers_features;
+    shader_subgroup_extended_types_features.pNext = next_ptr;
+    next_ptr = &shader_subgroup_extended_types_features;
 
     float16_int8_features.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR;
-    float16_int8_features.pNext = &shader_subgroup_extended_types_features;
+    float16_int8_features.pNext = next_ptr;
+    next_ptr = &float16_int8_features;
 
     storage_8bit_features.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES_KHR;
-    storage_8bit_features.pNext = &float16_int8_features;
+    storage_8bit_features.pNext = next_ptr;
+    next_ptr = &storage_8bit_features;
 
     storage_16bit_features.sType =
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES_KHR;
-    storage_16bit_features.pNext = &storage_8bit_features;
+    storage_16bit_features.pNext = next_ptr;
+    next_ptr = &storage_16bit_features;
+
+    if (supports_acceleration_structure_) {
+      acceleration_structure_features.sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+      acceleration_structure_features.pNext = next_ptr;
+      next_ptr = &acceleration_structure_features;
+    }
+
+    if (supports_buffer_device_address_) {
+      buffer_device_address_features.sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+      buffer_device_address_features.pNext = next_ptr;
+      next_ptr = &buffer_device_address_features;
+    }
+
+    if (supports_ray_tracing_pipeline_) {
+      ray_tracing_pipeline_features.sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+      ray_tracing_pipeline_features.pNext = next_ptr;
+      next_ptr = &ray_tracing_pipeline_features;
+    }
 
     VkPhysicalDeviceFeatures2KHR features2 = VkPhysicalDeviceFeatures2KHR();
     features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
-    features2.pNext = &storage_16bit_features;
+    features2.pNext = next_ptr;
 
     auto vkGetPhysicalDeviceFeatures2KHR =
         reinterpret_cast<PFN_vkGetPhysicalDeviceFeatures2KHR>(
@@ -887,7 +940,13 @@ amber::Result ConfigHelperVulkan::CheckVulkanPhysicalDeviceRequirements(
                VK_FALSE) ||
           (feature == kShaderSubgroupExtendedTypes &&
            shader_subgroup_extended_types_features
-                   .shaderSubgroupExtendedTypes == VK_FALSE)) {
+                   .shaderSubgroupExtendedTypes == VK_FALSE) ||
+          (feature == kAccelerationStructure &&
+           acceleration_structure_features.accelerationStructure == VK_FALSE) ||
+          (feature == kBufferDeviceAddress &&
+           buffer_device_address_features.bufferDeviceAddress == VK_FALSE) ||
+          (feature == kRayTracingPipeline &&
+           ray_tracing_pipeline_features.rayTracingPipeline == VK_FALSE)) {
         return amber::Result("Device does not support all required features");
       }
     }
@@ -980,28 +1039,32 @@ amber::Result ConfigHelperVulkan::CreateVulkanDevice(
   queue_info.queueCount = 1;
   queue_info.pQueuePriorities = priorities;
 
+  VkDeviceCreateInfo info = VkDeviceCreateInfo();
+  info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+  info.pQueueCreateInfos = &queue_info;
+  info.queueCreateInfoCount = 1;
+
+  if (supports_get_physical_device_properties2_)
+    return CreateDeviceWithFeatures2(required_features, required_extensions,
+                                     &info);
+  return CreateDeviceWithFeatures1(required_features, required_extensions,
+                                   &info);
+}
+
+amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures1(
+    const std::vector<std::string>& required_features,
+    const std::vector<std::string>& required_extensions,
+    VkDeviceCreateInfo* info) {
   std::vector<const char*> required_extensions_in_char;
   std::transform(
       required_extensions.begin(), required_extensions.end(),
       std::back_inserter(required_extensions_in_char),
       [](const std::string& ext) -> const char* { return ext.c_str(); });
 
-  VkDeviceCreateInfo info = VkDeviceCreateInfo();
-  info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  info.pQueueCreateInfos = &queue_info;
-  info.queueCreateInfoCount = 1;
-  info.enabledExtensionCount =
+  info->enabledExtensionCount =
       static_cast<uint32_t>(required_extensions_in_char.size());
-  info.ppEnabledExtensionNames = required_extensions_in_char.data();
+  info->ppEnabledExtensionNames = required_extensions_in_char.data();
 
-  if (supports_get_physical_device_properties2_)
-    return CreateDeviceWithFeatures2(required_features, &info);
-  return CreateDeviceWithFeatures1(required_features, &info);
-}
-
-amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures1(
-    const std::vector<std::string>& required_features,
-    VkDeviceCreateInfo* info) {
   VkPhysicalDeviceFeatures required_vulkan_features =
       VkPhysicalDeviceFeatures();
   amber::Result r =
@@ -1015,6 +1078,7 @@ amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures1(
 
 amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures2(
     const std::vector<std::string>& required_features,
+    const std::vector<std::string>& required_extensions,
     VkDeviceCreateInfo* info) {
   variable_pointers_feature_.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTER_FEATURES_KHR;
@@ -1040,35 +1104,127 @@ amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures2(
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES;
   shader_subgroup_extended_types_feature_.pNext = nullptr;
 
-  void** next_ptr = &variable_pointers_feature_.pNext;
+  acceleration_structure_feature_.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+  acceleration_structure_feature_.pNext = nullptr;
+
+  buffer_device_address_feature_.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+  buffer_device_address_feature_.pNext = nullptr;
+
+  ray_tracing_pipeline_feature_.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+  ray_tracing_pipeline_feature_.pNext = nullptr;
+
+  std::vector<std::string> exts = required_extensions;
+
+  void* pnext = nullptr;
+  void** next_ptr = nullptr;
+
+  if (supports_variable_pointers_) {
+    if (pnext == nullptr) {
+      pnext = &variable_pointers_feature_;
+    }
+    if (next_ptr != nullptr) {
+      *next_ptr = &variable_pointers_feature_.pNext;
+    }
+    next_ptr = &variable_pointers_feature_.pNext;
+    exts.push_back(VK_KHR_VARIABLE_POINTERS_EXTENSION_NAME);
+  }
 
   if (supports_shader_float16_int8_) {
-    *next_ptr = &float16_int8_feature_;
+    if (pnext == nullptr) {
+      pnext = &float16_int8_feature_;
+    }
+    if (next_ptr != nullptr) {
+      *next_ptr = &float16_int8_feature_;
+    }
     next_ptr = &float16_int8_feature_.pNext;
   }
 
   if (supports_shader_8bit_storage_) {
-    *next_ptr = &storage_8bit_feature_;
+    if (pnext == nullptr) {
+      pnext = &storage_8bit_feature_;
+    }
+    if (next_ptr != nullptr) {
+      *next_ptr = &storage_8bit_feature_;
+    }
     next_ptr = &storage_8bit_feature_.pNext;
   }
 
   if (supports_shader_16bit_storage_) {
-    *next_ptr = &storage_16bit_feature_;
+    if (pnext == nullptr) {
+      pnext = &storage_16bit_feature_;
+    }
+    if (next_ptr != nullptr) {
+      *next_ptr = &storage_16bit_feature_;
+    }
     next_ptr = &storage_16bit_feature_.pNext;
   }
 
   if (supports_subgroup_size_control_) {
-    *next_ptr = &subgroup_size_control_feature_;
+    if (pnext == nullptr) {
+      pnext = &subgroup_size_control_feature_;
+    }
+    if (next_ptr != nullptr) {
+      *next_ptr = &subgroup_size_control_feature_;
+    }
     next_ptr = &subgroup_size_control_feature_.pNext;
+
+    exts.push_back(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME);
   }
 
   if (supports_shader_subgroup_extended_types_) {
-    *next_ptr = &shader_subgroup_extended_types_feature_;
+    if (pnext == nullptr) {
+      pnext = &shader_subgroup_extended_types_feature_;
+    }
+    if (next_ptr != nullptr) {
+      *next_ptr = &shader_subgroup_extended_types_feature_;
+    }
     next_ptr = &shader_subgroup_extended_types_feature_.pNext;
   }
 
+  if (supports_acceleration_structure_) {
+    if (pnext == nullptr) {
+      pnext = &acceleration_structure_feature_;
+    }
+    if (next_ptr != nullptr) {
+      *next_ptr = &acceleration_structure_feature_;
+    }
+    next_ptr = &acceleration_structure_feature_.pNext;
+  }
+
+  if (supports_buffer_device_address_) {
+    if (pnext == nullptr) {
+      pnext = &buffer_device_address_feature_;
+    }
+    if (next_ptr != nullptr) {
+      *next_ptr = &buffer_device_address_feature_;
+    }
+    next_ptr = &buffer_device_address_feature_.pNext;
+  }
+
+  if (supports_ray_tracing_pipeline_) {
+    if (pnext == nullptr) {
+      pnext = &ray_tracing_pipeline_feature_;
+    }
+    if (next_ptr != nullptr) {
+      *next_ptr = &ray_tracing_pipeline_feature_;
+    }
+    next_ptr = &ray_tracing_pipeline_feature_.pNext;
+  }
+
   available_features2_.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
-  available_features2_.pNext = &variable_pointers_feature_;
+  available_features2_.pNext = pnext;
+
+  std::vector<const char*> required_extensions_in_char;
+  std::transform(
+      exts.begin(), exts.end(), std::back_inserter(required_extensions_in_char),
+      [](const std::string& ext) -> const char* { return ext.c_str(); });
+
+  info->enabledExtensionCount =
+      static_cast<uint32_t>(required_extensions_in_char.size());
+  info->ppEnabledExtensionNames = required_extensions_in_char.data();
 
   std::vector<std::string> feature1_names;
   for (const auto& feature : required_features) {
@@ -1107,6 +1263,12 @@ amber::Result ConfigHelperVulkan::CreateDeviceWithFeatures2(
     else if (feature == kShaderSubgroupExtendedTypes)
       shader_subgroup_extended_types_feature_.shaderSubgroupExtendedTypes =
           VK_TRUE;
+    else if (feature == kAccelerationStructure)
+      acceleration_structure_feature_.accelerationStructure = VK_TRUE;
+    else if (feature == kBufferDeviceAddress)
+      buffer_device_address_feature_.bufferDeviceAddress = VK_TRUE;
+    else if (feature == kRayTracingPipeline)
+      ray_tracing_pipeline_feature_.rayTracingPipeline = VK_TRUE;
   }
 
   VkPhysicalDeviceFeatures required_vulkan_features =

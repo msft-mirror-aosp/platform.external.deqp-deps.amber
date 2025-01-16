@@ -14,19 +14,20 @@ vars = {
   'clspv_llvm_revision': 'b70366c9c430e1eadd59d5a1dfbb9c4d84f83de5',
   'clspv_revision': 'f99809bdab1710846633b4ec24f5448263e75da7',
   'cpplint_revision': 'fa12a0bbdafa15291276ddd2a2dcd2ac7a2ce4cb',
-  'dxc_revision': 'c45db48d565a9edc14b025e43b90e62264d06eea',
-  'glslang_revision': '81cc10a498b25a90147cccd6e8939493c1e9e20e',
+  'dxc_revision': '773b01272719e07ea369bc17f5ddfce248751c7a',
+  'directx_headers_revision': '980971e835876dc0cde415e8f9bc646e64667bf7',
+  'glslang_revision': 'e8dd0b6903b34f1879520b444634c75ea2deedf5',
   'googletest_revision': '16f637fbf4ffc3f7a01fa4eceb7906634565242f',
   'json_revision': '4f8fba14066156b73f1189a2b8bd568bde5284c5',
   'lodepng_revision': '5601b8272a6850b7c5d693dd0c0e16da50be8d8d',
-  'shaderc_revision': 'e72186b66bb90ed06aaf15cbdc9a053581a0616b',
-  'spirv_headers_revision': 'd13b52222c39a7e9a401b44646f0ca3a640fbd47',
-  'spirv_tools_revision': 'd87f61605b3647fbceae9aaa922fce0031afdc63',
-  'swiftshader_revision': 'bca23447ad4667a7b79973569ab5d8d905d211ac',
-  'vulkan_headers_revision': '1dace16d8044758d32736eb59802d171970e9448',
-  'vulkan_loader_revision': '8aad559a09388ceb5b968af64a2b965d3886e5a0',
-  'vulkan_validationlayers_revision': 'a6c1ddca49331d8addde052554487180ee8aec13',
-  'robin_hood_hashing_revision': '24b3f50f9532153edc23b29ae277dcccfd75a462',
+  'shaderc_revision': 'f59f0d11b80fd622383199c867137ededf89d43b',
+  'spirv_headers_revision': '36d5e2ddaa54c70d2f29081510c66f4fc98e5e53',
+  'spirv_tools_revision': '3fb52548bc8a68d349d31e21bd4e80e3d953e87c',
+  'swiftshader_revision': 'da334852e70510d259bfa8cbaa7c5412966b2f41',
+  'vulkan_headers_revision': '49af1bfe467dd5a9efc22f7867d95fdde50e2b00',
+  'vulkan_loader_revision': 'ce2d68b24b66a91ed798d870ca205f899ee6e79d',
+  'vulkan_utility_libraries_revision': 'b538fb5b08513aa78346cd414ad5e576a2a3e920',
+  'vulkan_validationlayers_revision': '902f3cf8d51e76be0c0deb4be39c6223abebbae2',
 }
 
 deps = {
@@ -41,6 +42,9 @@ deps = {
 
   'third_party/dxc': Var('microsoft_git') + '/DirectXShaderCompiler.git@' +
       Var('dxc_revision'),
+
+  'third_party/DirectX-Headers': Var('microsoft_git') + '/DirectX-Headers.git@' +
+      Var('directx_headers_revision'),
 
   'third_party/googletest': Var('google_git') + '/googletest.git@' +
       Var('googletest_revision'),
@@ -75,6 +79,6 @@ deps = {
   'third_party/vulkan-loader': Var('khronos_git') + '/Vulkan-Loader.git@' +
       Var('vulkan_loader_revision'),
 
-  'third_party/robin-hood-hashing': Var('martinus_git') + '/robin-hood-hashing.git@' +
-      Var('robin_hood_hashing_revision'),
+  'third_party/vulkan-utility-libraries': Var('khronos_git') + '/Vulkan-Utility-Libraries.git@' +
+      Var('vulkan_utility_libraries_revision'),
 }

@@ -1,4 +1,5 @@
 // Copyright 2018 The Amber Authors.
+// Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,7 +132,32 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name == "SubgroupSupportedStages.compute" ||
          name == "IndexTypeUint8Features.indexTypeUint8" ||
          name ==
-             "ShaderSubgroupExtendedTypesFeatures.shaderSubgroupExtendedTypes";
+             "ShaderSubgroupExtendedTypesFeatures"
+             ".shaderSubgroupExtendedTypes" ||
+         name == "RayTracingPipelineFeaturesKHR.rayTracingPipeline" ||
+         name == "AccelerationStructureFeaturesKHR.accelerationStructure" ||
+         name == "BufferDeviceAddressFeatures.bufferDeviceAddress";
+}
+
+bool Script::IsKnownProperty(const std::string& name) const {
+  return name ==
+             "FloatControlsProperties.shaderSignedZeroInfNanPreserveFloat16" ||
+         name ==
+             "FloatControlsProperties.shaderSignedZeroInfNanPreserveFloat32" ||
+         name ==
+             "FloatControlsProperties.shaderSignedZeroInfNanPreserveFloat64" ||
+         name == "FloatControlsProperties.shaderDenormPreserveFloat16" ||
+         name == "FloatControlsProperties.shaderDenormPreserveFloat32" ||
+         name == "FloatControlsProperties.shaderDenormPreserveFloat64" ||
+         name == "FloatControlsProperties.shaderDenormFlushToZeroFloat16" ||
+         name == "FloatControlsProperties.shaderDenormFlushToZeroFloat32" ||
+         name == "FloatControlsProperties.shaderDenormFlushToZeroFloat64" ||
+         name == "FloatControlsProperties.shaderRoundingModeRTEFloat16" ||
+         name == "FloatControlsProperties.shaderRoundingModeRTEFloat32" ||
+         name == "FloatControlsProperties.shaderRoundingModeRTEFloat64" ||
+         name == "FloatControlsProperties.shaderRoundingModeRTZFloat16" ||
+         name == "FloatControlsProperties.shaderRoundingModeRTZFloat32" ||
+         name == "FloatControlsProperties.shaderRoundingModeRTZFloat64";
 }
 
 type::Type* Script::ParseType(const std::string& str) {
