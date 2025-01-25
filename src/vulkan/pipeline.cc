@@ -1,4 +1,5 @@
 // Copyright 2018 The Amber Authors.
+// Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +16,7 @@
 #include "src/vulkan/pipeline.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <utility>
 
@@ -26,7 +28,9 @@
 #include "src/vulkan/device.h"
 #include "src/vulkan/graphics_pipeline.h"
 #include "src/vulkan/image_descriptor.h"
+#include "src/vulkan/raytracing_pipeline.h"
 #include "src/vulkan/sampler_descriptor.h"
+#include "src/vulkan/tlas_descriptor.h"
 
 namespace amber {
 namespace vulkan {
@@ -34,15 +38,24 @@ namespace {
 
 const char* kDefaultEntryPointName = "main";
 
+constexpr VkMemoryBarrier kMemoryBarrierFull = {
+    VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr,
+    VK_ACCESS_2_MEMORY_READ_BIT_KHR | VK_ACCESS_2_MEMORY_WRITE_BIT_KHR,
+    VK_ACCESS_2_MEMORY_READ_BIT_KHR | VK_ACCESS_2_MEMORY_WRITE_BIT_KHR};
+
+constexpr uint32_t kNumQueryObjects = 2;
+
 }  // namespace
 
 Pipeline::Pipeline(
     PipelineType type,
     Device* device,
     uint32_t fence_timeout_ms,
-    bool    pipeline_runtime_layer_enabled,
-    const std::vector<VkPipelineShaderStageCreateInfo>& shader_stage_info)
+    bool pipeline_runtime_layer_enabled,
+    const std::vector<VkPipelineShaderStageCreateInfo>& shader_stage_info,
+    VkPipelineCreateFlags create_flags)
     : device_(device),
+      create_flags_(create_flags),
       pipeline_type_(type),
       shader_stage_info_(shader_stage_info),
       fence_timeout_ms_(fence_timeout_ms),
@@ -67,6 +80,18 @@ Pipeline::~Pipeline() {
                                                   info.pool, nullptr);
     }
   }
+
+  if (pipeline_layout_ != VK_NULL_HANDLE) {
+    device_->GetPtrs()->vkDestroyPipelineLayout(device_->GetVkDevice(),
+                                                pipeline_layout_, nullptr);
+    pipeline_layout_ = VK_NULL_HANDLE;
+  }
+
+  if (pipeline_ != VK_NULL_HANDLE) {
+    device_->GetPtrs()->vkDestroyPipeline(device_->GetVkDevice(), pipeline_,
+                                          nullptr);
+    pipeline_ = VK_NULL_HANDLE;
+  }
 }
 
 GraphicsPipeline* Pipeline::AsGraphics() {
@@ -75,6 +100,10 @@ GraphicsPipeline* Pipeline::AsGraphics() {
 
 ComputePipeline* Pipeline::AsCompute() {
   return static_cast<ComputePipeline*>(this);
+}
+
+RayTracingPipeline* Pipeline::AsRayTracingPipeline() {
+  return static_cast<RayTracingPipeline*>(this);
 }
 
 Result Pipeline::Initialize(CommandPool* pool) {
@@ -232,6 +261,84 @@ void Pipeline::UpdateDescriptorSetsIfNeeded() {
   }
 }
 
+void Pipeline::CreateTimingQueryObjectIfNeeded(bool is_timed_execution) {
+  if (!is_timed_execution ||
+      !device_->IsTimestampComputeAndGraphicsSupported()) {
+    return;
+  }
+  in_timed_execution_ = true;
+  VkQueryPoolCreateInfo pool_create_info{
+      VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+      nullptr,
+      0,
+      VK_QUERY_TYPE_TIMESTAMP,
+      kNumQueryObjects,
+      0};
+  device_->GetPtrs()->vkCreateQueryPool(
+      device_->GetVkDevice(), &pool_create_info, nullptr, &query_pool_);
+}
+
+void Pipeline::DestroyTimingQueryObjectIfNeeded() {
+  if (!in_timed_execution_) {
+    return;
+  }
+
+  // Flags set so we may/will wait on the CPU for the availiblity of our
+  // queries.
+  const VkQueryResultFlags flags =
+      VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_64_BIT;
+  std::array<uint64_t, kNumQueryObjects> time_stamps = {};
+  constexpr VkDeviceSize kStrideBytes = sizeof(uint64_t);
+
+  device_->GetPtrs()->vkGetQueryPoolResults(
+      device_->GetVkDevice(), query_pool_, 0, kNumQueryObjects,
+      sizeof(time_stamps), time_stamps.data(), kStrideBytes, flags);
+  double time_in_ns = static_cast<double>(time_stamps[1] - time_stamps[0]) *
+                      static_cast<double>(device_->GetTimestampPeriod());
+
+  constexpr double kNsToMsTime = 1.0 / 1000000.0;
+  device_->ReportExecutionTiming(time_in_ns * kNsToMsTime);
+  device_->GetPtrs()->vkDestroyQueryPool(device_->GetVkDevice(), query_pool_,
+                                         nullptr);
+  in_timed_execution_ = false;
+}
+
+void Pipeline::BeginTimerQuery() {
+  if (!in_timed_execution_) {
+    return;
+  }
+
+  device_->GetPtrs()->vkCmdResetQueryPool(command_->GetVkCommandBuffer(),
+                                          query_pool_, 0, kNumQueryObjects);
+  // Full barrier prevents any work from before the point being still in the
+  // pipeline.
+  device_->GetPtrs()->vkCmdPipelineBarrier(
+      command_->GetVkCommandBuffer(), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 1, &kMemoryBarrierFull, 0, nullptr,
+      0, nullptr);
+  constexpr uint32_t kBeginQueryIndexOffset = 0;
+  device_->GetPtrs()->vkCmdWriteTimestamp(command_->GetVkCommandBuffer(),
+                                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                          query_pool_, kBeginQueryIndexOffset);
+}
+
+void Pipeline::EndTimerQuery() {
+  if (!in_timed_execution_) {
+    return;
+  }
+
+  // Full barrier ensures that work including in our timing is executed before
+  // the timestamp.
+  device_->GetPtrs()->vkCmdPipelineBarrier(
+      command_->GetVkCommandBuffer(), VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 1, &kMemoryBarrierFull, 0, nullptr,
+      0, nullptr);
+  constexpr uint32_t kEndQueryIndexOffset = 1;
+  device_->GetPtrs()->vkCmdWriteTimestamp(command_->GetVkCommandBuffer(),
+                                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                          query_pool_, kEndQueryIndexOffset);
+}
+
 Result Pipeline::RecordPushConstant(const VkPipelineLayout& pipeline_layout) {
   return push_constant_->RecordPushConstantVkCommand(command_.get(),
                                                      pipeline_layout);
@@ -277,9 +384,9 @@ Result Pipeline::GetDescriptorSlot(uint32_t desc_set,
 
 Result Pipeline::AddDescriptorBuffer(Buffer* amber_buffer) {
   // Don't add the buffer if it's already added.
-  const auto& buffer = std::find_if(
-      descriptor_buffers_.begin(), descriptor_buffers_.end(),
-      [&](const Buffer* buf) { return buf == amber_buffer; });
+  const auto& buffer =
+      std::find_if(descriptor_buffers_.begin(), descriptor_buffers_.end(),
+                   [&](const Buffer* buf) { return buf == amber_buffer; });
   if (buffer != descriptor_buffers_.end()) {
     return {};
   }
@@ -411,6 +518,35 @@ Result Pipeline::AddSamplerDescriptor(const SamplerCommand* cmd) {
   return {};
 }
 
+Result Pipeline::AddTLASDescriptor(const TLASCommand* cmd) {
+  if (cmd == nullptr)
+    return Result("Pipeline::AddTLASDescriptor TLASCommand is nullptr");
+
+  Descriptor* desc;
+  Result r =
+      GetDescriptorSlot(cmd->GetDescriptorSet(), cmd->GetBinding(), &desc);
+  if (!r.IsSuccess())
+    return r;
+
+  auto& descriptors = descriptor_set_info_[cmd->GetDescriptorSet()].descriptors;
+
+  if (desc == nullptr) {
+    auto tlas_desc = MakeUnique<TLASDescriptor>(
+        cmd->GetTLAS(), DescriptorType::kTLAS, device_, GetBlases(),
+        GetTlases(), cmd->GetDescriptorSet(), cmd->GetBinding());
+    descriptors.push_back(std::move(tlas_desc));
+  } else {
+    if (desc->GetDescriptorType() != DescriptorType::kTLAS) {
+      return Result(
+          "Descriptors bound to the same binding needs to have matching "
+          "descriptor types");
+    }
+    desc->AsTLASDescriptor()->AddAmberTLAS(cmd->GetTLAS());
+  }
+
+  return {};
+}
+
 Result Pipeline::SendDescriptorDataToDeviceIfNeeded() {
   {
     CommandBufferGuard guard(GetCommandBuffer());
@@ -434,7 +570,7 @@ Result Pipeline::SendDescriptorDataToDeviceIfNeeded() {
       }
       Result r = descriptor_transfer_resources_[buffer]->Initialize();
       if (!r.IsSuccess())
-         return r;
+        return r;
     }
 
     // Note that if a buffer for a descriptor is host accessible and
@@ -443,8 +579,8 @@ Result Pipeline::SendDescriptorDataToDeviceIfNeeded() {
     // done after resizing backed buffer i.e., copying data to the new
     // buffer from the old one. Thus, we must submit commands here to
     // guarantee this.
-    Result r = guard.Submit(GetFenceTimeout(),
-                            GetPipelineRuntimeLayerEnabled());
+    Result r =
+        guard.Submit(GetFenceTimeout(), GetPipelineRuntimeLayerEnabled());
     if (!r.IsSuccess())
       return r;
   }
@@ -508,8 +644,10 @@ void Pipeline::BindVkDescriptorSets(const VkPipelineLayout& pipeline_layout) {
 
     device_->GetPtrs()->vkCmdBindDescriptorSets(
         command_->GetVkCommandBuffer(),
-        IsGraphics() ? VK_PIPELINE_BIND_POINT_GRAPHICS
-                     : VK_PIPELINE_BIND_POINT_COMPUTE,
+        IsGraphics()     ? VK_PIPELINE_BIND_POINT_GRAPHICS
+        : IsCompute()    ? VK_PIPELINE_BIND_POINT_COMPUTE
+        : IsRayTracing() ? VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
+                         : VK_PIPELINE_BIND_POINT_MAX_ENUM,
         pipeline_layout, static_cast<uint32_t>(i), 1,
         &descriptor_set_info_[i].vk_desc_set,
         static_cast<uint32_t>(dynamic_offsets.size()), dynamic_offsets.data());
@@ -517,6 +655,9 @@ void Pipeline::BindVkDescriptorSets(const VkPipelineLayout& pipeline_layout) {
 }
 
 Result Pipeline::ReadbackDescriptorsToHostDataQueue() {
+  if (descriptor_buffers_.empty())
+    return Result{};
+
   // Record required commands to copy the data to a host visible buffer.
   {
     CommandBufferGuard guard(GetCommandBuffer());
@@ -551,8 +692,8 @@ Result Pipeline::ReadbackDescriptorsToHostDataQueue() {
       }
     }
 
-    Result r = guard.Submit(GetFenceTimeout(),
-                            GetPipelineRuntimeLayerEnabled());
+    Result r =
+        guard.Submit(GetFenceTimeout(), GetPipelineRuntimeLayerEnabled());
     if (!r.IsSuccess())
       return r;
   }
