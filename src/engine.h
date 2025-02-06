@@ -1,4 +1,5 @@
 // Copyright 2018 The Amber Authors.
+// Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,6 +72,7 @@ class Engine {
       EngineConfig* config,
       Delegate* delegate,
       const std::vector<std::string>& features,
+      const std::vector<std::string>& properties,
       const std::vector<std::string>& instance_extensions,
       const std::vector<std::string>& device_extensions) = 0;
 
@@ -100,6 +102,9 @@ class Engine {
 
   /// Execute the compute command
   virtual Result DoCompute(const ComputeCommand* cmd) = 0;
+
+  /// Execute the trace rays command
+  virtual Result DoTraceRays(const RayTracingCommand* cmd) = 0;
 
   /// Execute the entry point command
   virtual Result DoEntryPoint(const EntryPointCommand* cmd) = 0;

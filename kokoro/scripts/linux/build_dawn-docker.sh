@@ -26,6 +26,7 @@ git config --global --add safe.directory '*'
 
 using cmake-3.17.2
 using ninja-1.10.0
+using python-3.12
 
 if [ ! -z "$COMPILER" ]; then
     using "$COMPILER"
@@ -56,6 +57,9 @@ cp scripts/standalone.gclient .gclient
 
 # Fetch external dependencies and toolchains with gclient
 gclient sync
+
+sudo chown -R "$(id -u):$(id -g)" build/
+sudo chown -R "$(id -u):$(id -g)" third_party/
 
 # Generate build files
 mkdir -p out/Release
