@@ -21,7 +21,6 @@
 
 #include "gtest/gtest.h"
 #include "src/engine.h"
-#include "src/make_unique.h"
 #include "src/vkscript/parser.h"
 
 namespace amber {
@@ -61,8 +60,9 @@ class EngineStub : public Engine {
   Result DoClearColor(const ClearColorCommand* cmd) override {
     did_clear_color_command_ = true;
 
-    if (fail_clear_color_command_)
+    if (fail_clear_color_command_) {
       return Result("clear color command failed");
+    }
 
     last_clear_color_ = const_cast<ClearColorCommand*>(cmd);
     return {};
@@ -73,8 +73,9 @@ class EngineStub : public Engine {
   Result DoClearStencil(const ClearStencilCommand*) override {
     did_clear_stencil_command_ = true;
 
-    if (fail_clear_stencil_command_)
+    if (fail_clear_stencil_command_) {
       return Result("clear stencil command failed");
+    }
 
     return {};
   }
@@ -84,8 +85,9 @@ class EngineStub : public Engine {
   Result DoClearDepth(const ClearDepthCommand*) override {
     did_clear_depth_command_ = true;
 
-    if (fail_clear_depth_command_)
+    if (fail_clear_depth_command_) {
       return Result("clear depth command failed");
+    }
 
     return {};
   }
@@ -95,8 +97,9 @@ class EngineStub : public Engine {
   Result DoClear(const ClearCommand*) override {
     did_clear_command_ = true;
 
-    if (fail_clear_command_)
+    if (fail_clear_command_) {
       return Result("clear command failed");
+    }
     return {};
   }
 
@@ -105,16 +108,18 @@ class EngineStub : public Engine {
   Result DoDrawRect(const DrawRectCommand*) override {
     did_draw_rect_command_ = true;
 
-    if (fail_draw_rect_command_)
+    if (fail_draw_rect_command_) {
       return Result("draw rect command failed");
+    }
     return {};
   }
 
   Result DoDrawGrid(const DrawGridCommand*) override {
     did_draw_grid_command_ = true;
 
-    if (fail_draw_grid_command_)
+    if (fail_draw_grid_command_) {
       return Result("draw grid command failed");
+    }
     return {};
   }
 
@@ -123,8 +128,9 @@ class EngineStub : public Engine {
   Result DoDrawArrays(const DrawArraysCommand*) override {
     did_draw_arrays_command_ = true;
 
-    if (fail_draw_arrays_command_)
+    if (fail_draw_arrays_command_) {
       return Result("draw arrays command failed");
+    }
     return {};
   }
 
@@ -133,8 +139,9 @@ class EngineStub : public Engine {
   Result DoCompute(const ComputeCommand*) override {
     did_compute_command_ = true;
 
-    if (fail_compute_command_)
+    if (fail_compute_command_) {
       return Result("compute command failed");
+    }
     return {};
   }
 
@@ -143,8 +150,9 @@ class EngineStub : public Engine {
   Result DoEntryPoint(const EntryPointCommand*) override {
     did_entry_point_command_ = true;
 
-    if (fail_entry_point_command_)
+    if (fail_entry_point_command_) {
       return Result("entrypoint command failed");
+    }
     return {};
   }
 
@@ -154,8 +162,9 @@ class EngineStub : public Engine {
       const PatchParameterVerticesCommand*) override {
     did_patch_command_ = true;
 
-    if (fail_patch_command_)
+    if (fail_patch_command_) {
       return Result("patch command failed");
+    }
     return {};
   }
 
@@ -164,8 +173,9 @@ class EngineStub : public Engine {
   Result DoBuffer(const BufferCommand*) override {
     did_buffer_command_ = true;
 
-    if (fail_buffer_command_)
+    if (fail_buffer_command_) {
       return Result("buffer command failed");
+    }
     return {};
   }
 
@@ -211,13 +221,15 @@ class VkScriptExecutorTest : public testing::Test {
   VkScriptExecutorTest() = default;
   ~VkScriptExecutorTest() override = default;
 
-  std::unique_ptr<Engine> MakeEngine() { return MakeUnique<EngineStub>(); }
+  std::unique_ptr<Engine> MakeEngine() {
+    return std::make_unique<EngineStub>();
+  }
   std::unique_ptr<Engine> MakeAndInitializeEngine(
       const std::vector<std::string>& features,
       const std::vector<std::string>& properties,
       const std::vector<std::string>& instance_extensions,
       const std::vector<std::string>& device_extensions) {
-    std::unique_ptr<Engine> engine = MakeUnique<EngineStub>();
+    std::unique_ptr<Engine> engine = std::make_unique<EngineStub>();
     engine->Initialize(nullptr, nullptr, features, properties,
                        instance_extensions, device_extensions);
     return engine;

@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.22)
+cmake_policy(SET CMP0091 OLD) # Assume old-style selection of MSVC runtime
 if (POLICY CMP0048)
   cmake_policy(SET CMP0048 NEW)
 endif()
@@ -221,12 +222,15 @@ function(amber_default_compile_options TARGET)
       target_compile_options(${TARGET} PRIVATE -fno-rtti)
     endif()
 
-    if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR
+        "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
       target_compile_options(${TARGET} PRIVATE
         -Wno-c++98-compat
         -Wno-c++98-compat-pedantic
         -Wno-format-pedantic
         -Wno-unknown-warning-option
+
+        -Wno-switch-default
       )
       if (NOT ${AMBER_DISABLE_WEVERYTHING})
         target_compile_options(${TARGET} PRIVATE -Weverything)

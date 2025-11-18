@@ -15,12 +15,11 @@
 
 #include "src/script.h"
 
-#include "src/make_unique.h"
 #include "src/type_parser.h"
 
 namespace amber {
 
-Script::Script() : virtual_files_(MakeUnique<VirtualFileStore>()) {}
+Script::Script() : virtual_files_(std::make_unique<VirtualFileStore>()) {}
 
 Script::~Script() = default;
 
@@ -58,10 +57,11 @@ std::vector<ShaderInfo> Script::GetShaderInfo() const {
 
 void Script::AddRequiredExtension(const std::string& ext) {
   // Make this smarter when we have more instance extensions to match.
-  if (ext == "VK_KHR_get_physical_device_properties2")
+  if (ext == "VK_KHR_get_physical_device_properties2") {
     AddRequiredInstanceExtension(ext);
-  else
+  } else {
     AddRequiredDeviceExtension(ext);
+  }
 }
 
 bool Script::IsKnownFeature(const std::string& name) const {
@@ -114,6 +114,7 @@ bool Script::IsKnownFeature(const std::string& name) const {
          name == "Storage16BitFeatures.uniformAndStorageBuffer16BitAccess" ||
          name == "Storage16BitFeatures.storagePushConstant16" ||
          name == "Storage16BitFeatures.storageInputOutput16" ||
+         name == "DepthClampZeroOneFeatures.depthClampZeroOne" ||
          name == "SubgroupSizeControl.subgroupSizeControl" ||
          name == "SubgroupSizeControl.computeFullSubgroups" ||
          name == "SubgroupSupportedOperations.basic" ||
@@ -162,8 +163,9 @@ bool Script::IsKnownProperty(const std::string& name) const {
 
 type::Type* Script::ParseType(const std::string& str) {
   auto type = GetType(str);
-  if (type)
+  if (type) {
     return type;
+  }
 
   TypeParser parser;
   auto new_type = parser.Parse(str);

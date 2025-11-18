@@ -41,10 +41,12 @@ TLASDescriptor::~TLASDescriptor() = default;
 Result TLASDescriptor::CreateResourceIfNeeded() {
   for (amber::TLAS* amber_tlas : amber_tlases_) {
     if (tlases_->find(amber_tlas) == tlases_->end()) {
-      auto& vulkan_tlas = ((*tlases_)[amber_tlas] = MakeUnique<TLAS>(device_));
+      auto& vulkan_tlas =
+          ((*tlases_)[amber_tlas] = std::make_unique<TLAS>(device_));
       Result r = vulkan_tlas->CreateTLAS(amber_tlas, blases_);
-      if (!r.IsSuccess())
+      if (!r.IsSuccess()) {
         return r;
+      }
     }
   }
 
