@@ -36,8 +36,9 @@ BLAS::~BLAS() {
 }
 
 Result BLAS::CreateBLAS(amber::BLAS* blas) {
-  if (blas_ != VK_NULL_HANDLE)
+  if (blas_ != VK_NULL_HANDLE) {
     return Result("Cannot recreate acceleration structure");
+  }
 
   std::vector<std::unique_ptr<Geometry>>& geometries = blas->GetGeometries();
   std::vector<VkDeviceSize> vertexBufferOffsets;
@@ -87,12 +88,8 @@ Result BLAS::CreateBLAS(amber::BLAS* blas) {
     }
 
     const VkAccelerationStructureGeometryKHR accelerationStructureGeometry = {
-            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR,
-            nullptr,
-            geometryType,
-            geometry,
-            VkGeometryFlagsKHR(geometryData->GetFlags())
-        };
+        VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR, nullptr,
+        geometryType, geometry, VkGeometryFlagsKHR(geometryData->GetFlags())};
     const VkAccelerationStructureBuildRangeInfoKHR
         accelerationStructureBuildRangeInfosKHR = {
             static_cast<uint32_t>(geometryData->getPrimitiveCount()), 0, 0, 0};
@@ -136,8 +133,8 @@ Result BLAS::CreateBLAS(amber::BLAS* blas) {
   const uint32_t accelerationStructureSize =
       static_cast<uint32_t>(sizeInfo.accelerationStructureSize);
 
-  buffer_ =
-      MakeUnique<TransferBuffer>(device_, accelerationStructureSize, nullptr);
+  buffer_ = std::make_unique<TransferBuffer>(device_, accelerationStructureSize,
+                                             nullptr);
   buffer_->AddUsageFlags(
       VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
@@ -156,13 +153,14 @@ Result BLAS::CreateBLAS(amber::BLAS* blas) {
 
   if (device_->GetPtrs()->vkCreateAccelerationStructureKHR(
           device_->GetVkDevice(), &accelerationStructureCreateInfoKHR, nullptr,
-          &blas_) != VK_SUCCESS)
+          &blas_) != VK_SUCCESS) {
     return Result("Vulkan::Calling vkCreateAccelerationStructureKHR failed");
+  }
 
   accelerationStructureBuildGeometryInfoKHR_.dstAccelerationStructure = blas_;
 
   if (sizeInfo.buildScratchSize > 0) {
-    scratch_buffer_ = MakeUnique<TransferBuffer>(
+    scratch_buffer_ = std::make_unique<TransferBuffer>(
         device_, static_cast<uint32_t>(sizeInfo.buildScratchSize), nullptr);
     scratch_buffer_->AddUsageFlags(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
@@ -174,7 +172,7 @@ Result BLAS::CreateBLAS(amber::BLAS* blas) {
   }
 
   if (vertexBufferSize > 0) {
-    vertex_buffer_ = MakeUnique<TransferBuffer>(
+    vertex_buffer_ = std::make_unique<TransferBuffer>(
         device_, static_cast<uint32_t>(vertexBufferSize), nullptr);
     vertex_buffer_->AddUsageFlags(
         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
@@ -218,10 +216,12 @@ Result BLAS::CreateBLAS(amber::BLAS* blas) {
 }
 
 Result BLAS::BuildBLAS(CommandBuffer* command_buffer) {
-  if (blas_ == VK_NULL_HANDLE)
+  if (blas_ == VK_NULL_HANDLE) {
     return Result("Acceleration structure should be created first");
-  if (built_)
+  }
+  if (built_) {
     return {};
+  }
 
   VkCommandBuffer cmdBuffer = command_buffer->GetVkCommandBuffer();
 

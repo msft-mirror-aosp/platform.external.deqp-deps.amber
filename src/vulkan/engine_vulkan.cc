@@ -20,7 +20,6 @@
 #include <utility>
 
 #include "amber/amber_vulkan.h"
-#include "src/make_unique.h"
 #include "src/type_parser.h"
 #include "src/vulkan/compute_pipeline.h"
 #include "src/vulkan/graphics_pipeline.h"
@@ -82,8 +81,9 @@ Result ToVkShaderStage(ShaderType type, VkShaderStageFlagBits* ret) {
 bool AreAllExtensionsSupported(
     const std::vector<std::string>& available_extensions,
     const std::vector<std::string>& required_extensions) {
-  if (required_extensions.empty())
+  if (required_extensions.empty()) {
     return true;
+  }
 
   std::set<std::string> required_extension_set(required_extensions.begin(),
                                                required_extensions.end());
@@ -118,18 +118,23 @@ Result EngineVulkan::Initialize(
     const std::vector<std::string>& properties,
     const std::vector<std::string>& instance_extensions,
     const std::vector<std::string>& device_extensions) {
-  if (device_)
+  if (device_) {
     return Result("Vulkan::Initialize device_ already exists");
+  }
 
   VulkanEngineConfig* vk_config = static_cast<VulkanEngineConfig*>(config);
-  if (!vk_config || vk_config->vkGetInstanceProcAddr == VK_NULL_HANDLE)
+  if (!vk_config || vk_config->vkGetInstanceProcAddr == VK_NULL_HANDLE) {
     return Result("Vulkan::Initialize vkGetInstanceProcAddr must be provided.");
-  if (vk_config->device == VK_NULL_HANDLE)
+  }
+  if (vk_config->device == VK_NULL_HANDLE) {
     return Result("Vulkan::Initialize device must be provided");
-  if (vk_config->physical_device == VK_NULL_HANDLE)
+  }
+  if (vk_config->physical_device == VK_NULL_HANDLE) {
     return Result("Vulkan::Initialize physical device handle is null.");
-  if (vk_config->queue == VK_NULL_HANDLE)
+  }
+  if (vk_config->queue == VK_NULL_HANDLE) {
     return Result("Vulkan::Initialize queue handle is null.");
+  }
 
   // Validate instance extensions
   if (!AreAllExtensionsSupported(vk_config->available_instance_extensions,
@@ -137,7 +142,8 @@ Result EngineVulkan::Initialize(
     return Result("Vulkan::Initialize not all instance extensions supported");
   }
 
-  device_ = MakeUnique<Device>(vk_config->instance, vk_config->physical_device,
+  device_ =
+      std::make_unique<Device>(vk_config->instance, vk_config->physical_device,
                                vk_config->queue_family_index, vk_config->device,
                                vk_config->queue, delegate);
 
@@ -145,14 +151,16 @@ Result EngineVulkan::Initialize(
       vk_config->vkGetInstanceProcAddr, features, properties, device_extensions,
       vk_config->available_features, vk_config->available_features2,
       vk_config->available_properties2, vk_config->available_device_extensions);
-  if (!r.IsSuccess())
+  if (!r.IsSuccess()) {
     return r;
+  }
 
   if (!pool_) {
-    pool_ = MakeUnique<CommandPool>(device_.get());
+    pool_ = std::make_unique<CommandPool>(device_.get());
     r = pool_->Initialize();
-    if (!r.IsSuccess())
+    if (!r.IsSuccess()) {
       return r;
+    }
   }
 
   return {};
@@ -165,14 +173,16 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
 
   for (size_t i = 0; i < pipeline->GetShaders().size(); i++) {
     Result r = SetShader(pipeline, pipeline->GetShaders()[i], i);
-    if (!r.IsSuccess())
+    if (!r.IsSuccess()) {
       return r;
+    }
   }
 
   for (const auto& colour_info : pipeline->GetColorAttachments()) {
     auto fmt = colour_info.buffer->GetFormat();
-    if (!device_->IsFormatSupportedByPhysicalDevice(*fmt, colour_info.type))
+    if (!device_->IsFormatSupportedByPhysicalDevice(*fmt, colour_info.type)) {
       return Result("Vulkan color attachment format is not supported");
+    }
   }
 
   if (pipeline->GetDepthStencilBuffer().buffer) {
@@ -187,8 +197,9 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
 
   std::vector<VkPipelineShaderStageCreateInfo> stage_create_info;
   Result r = GetVkShaderStageInfo(pipeline, &stage_create_info);
-  if (!r.IsSuccess())
+  if (!r.IsSuccess()) {
     return r;
+  }
 
   const auto& engine_data = GetEngineData();
   std::unique_ptr<Pipeline> vk_pipeline;
@@ -196,22 +207,23 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
     std::vector<VkRayTracingShaderGroupCreateInfoKHR> shader_group_create_info;
 
     r = GetVkShaderGroupInfo(pipeline, &shader_group_create_info);
-    if (!r.IsSuccess())
+    if (!r.IsSuccess()) {
       return r;
+    }
 
-    vk_pipeline = MakeUnique<RayTracingPipeline>(
+    vk_pipeline = std::make_unique<RayTracingPipeline>(
         device_.get(), &blases_, &tlases_, engine_data.fence_timeout_ms,
         engine_data.pipeline_runtime_layer_enabled, stage_create_info,
         pipeline->GetCreateFlags());
     r = vk_pipeline->AsRayTracingPipeline()->Initialize(
         pool_.get(), shader_group_create_info);
   } else if (pipeline->GetType() == PipelineType::kCompute) {
-    vk_pipeline = MakeUnique<ComputePipeline>(
+    vk_pipeline = std::make_unique<ComputePipeline>(
         device_.get(), engine_data.fence_timeout_ms,
         engine_data.pipeline_runtime_layer_enabled, stage_create_info);
     r = vk_pipeline->AsCompute()->Initialize(pool_.get());
   } else {
-    vk_pipeline = MakeUnique<GraphicsPipeline>(
+    vk_pipeline = std::make_unique<GraphicsPipeline>(
         device_.get(), pipeline->GetColorAttachments(),
         pipeline->GetDepthStencilBuffer(), pipeline->GetResolveTargets(),
         engine_data.fence_timeout_ms,
@@ -225,8 +237,9 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
                                               pool_.get());
   }
 
-  if (!r.IsSuccess())
+  if (!r.IsSuccess()) {
     return r;
+  }
 
   info.vk_pipeline = std::move(vk_pipeline);
 
@@ -234,8 +247,9 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
   for (const auto& shader_info : pipeline->GetShaders()) {
     VkShaderStageFlagBits stage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
     r = ToVkShaderStage(shader_info.GetShaderType(), &stage);
-    if (!r.IsSuccess())
+    if (!r.IsSuccess()) {
       return r;
+    }
     const auto& name = shader_info.GetEntryPoint();
     if (!name.empty()) {
       info.vk_pipeline->SetEntryPointName(stage, name);
@@ -244,10 +258,12 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
 
   for (const auto& vtex_info : pipeline->GetVertexBuffers()) {
     auto fmt = vtex_info.buffer->GetFormat();
-    if (!device_->IsFormatSupportedByPhysicalDevice(*fmt, vtex_info.type))
+    if (!device_->IsFormatSupportedByPhysicalDevice(*fmt, vtex_info.type)) {
       return Result("Vulkan vertex buffer format is not supported");
-    if (!info.vertex_buffer)
-      info.vertex_buffer = MakeUnique<VertexBuffer>(device_.get());
+    }
+    if (!info.vertex_buffer) {
+      info.vertex_buffer = std::make_unique<VertexBuffer>(device_.get());
+    }
 
     info.vertex_buffer->SetData(static_cast<uint8_t>(vtex_info.location),
                                 vtex_info.buffer, vtex_info.input_rate,
@@ -263,8 +279,9 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
   if (pipeline->GetPushConstantBuffer().buffer != nullptr) {
     r = info.vk_pipeline->AddPushConstantBuffer(
         pipeline->GetPushConstantBuffer().buffer, 0);
-    if (!r.IsSuccess())
+    if (!r.IsSuccess()) {
       return r;
+    }
   }
 
   for (const auto& buf_info : pipeline->GetBuffers()) {
@@ -290,7 +307,7 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
                     std::to_string(static_cast<uint32_t>(buf_info.type)));
     }
 
-    auto cmd = MakeUnique<BufferCommand>(type, pipeline);
+    auto cmd = std::make_unique<BufferCommand>(type, pipeline);
     cmd->SetDescriptorSet(buf_info.descriptor_set);
     cmd->SetBinding(buf_info.binding);
     cmd->SetBaseMipLevel(buf_info.base_mip_level);
@@ -307,31 +324,34 @@ Result EngineVulkan::CreatePipeline(amber::Pipeline* pipeline) {
     }
 
     r = info.vk_pipeline->AddBufferDescriptor(cmd.get());
-    if (!r.IsSuccess())
+    if (!r.IsSuccess()) {
       return r;
+    }
   }
 
   for (const auto& sampler_info : pipeline->GetSamplers()) {
-    auto cmd = MakeUnique<SamplerCommand>(pipeline);
+    auto cmd = std::make_unique<SamplerCommand>(pipeline);
     cmd->SetDescriptorSet(sampler_info.descriptor_set);
     cmd->SetBinding(sampler_info.binding);
     cmd->SetSampler(sampler_info.sampler);
 
     r = info.vk_pipeline->AddSamplerDescriptor(cmd.get());
-    if (!r.IsSuccess())
+    if (!r.IsSuccess()) {
       return r;
+    }
   }
 
   if (info.vk_pipeline->IsRayTracing()) {
     for (const auto& tlas_info : pipeline->GetTLASes()) {
-      auto cmd = MakeUnique<TLASCommand>(pipeline);
+      auto cmd = std::make_unique<TLASCommand>(pipeline);
       cmd->SetDescriptorSet(tlas_info.descriptor_set);
       cmd->SetBinding(tlas_info.binding);
       cmd->SetTLAS(tlas_info.tlas);
 
       r = info.vk_pipeline->AddTLASDescriptor(cmd.get());
-      if (!r.IsSuccess())
+      if (!r.IsSuccess()) {
         return r;
+      }
     }
   }
 
@@ -349,8 +369,9 @@ Result EngineVulkan::SetShader(amber::Pipeline* pipeline,
 
   if (!rt) {
     auto it = info.shader_info.find(type);
-    if (it != info.shader_info.end())
+    if (it != info.shader_info.end()) {
       return Result("Vulkan::Setting Duplicated Shader Types Fail");
+    }
   }
 
   VkShaderModule shader_module = VK_NULL_HANDLE;
@@ -385,8 +406,9 @@ Result EngineVulkan::SetShader(amber::Pipeline* pipeline,
   }
 
   for (auto& shader_info : pipeline->GetShaders()) {
-    if (shader_info.GetShaderType() != type)
+    if (shader_info.GetShaderType() != type) {
       continue;
+    }
 
     const auto required_subgroup_size_setting =
         shader_info.GetRequiredSubgroupSizeSetting();
@@ -426,8 +448,9 @@ Result EngineVulkan::SetShader(amber::Pipeline* pipeline,
     }
 
     const auto& shader_spec_info = shader_info.GetSpecialization();
-    if (shader_spec_info.empty())
+    if (shader_spec_info.empty()) {
       continue;
+    }
 
     auto& entries = info.shader_info[type].specialization_entries;
     entries.reset(new std::vector<VkSpecializationMapEntry>());
@@ -458,8 +481,9 @@ Result EngineVulkan::GetVkShaderStageInfo(
     VkPipelineShaderStageCreateInfo* stage_info) {
   VkShaderStageFlagBits stage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
   Result r = ToVkShaderStage(shader_type, &stage);
-  if (!r.IsSuccess())
+  if (!r.IsSuccess()) {
     return r;
+  }
 
   *stage_info = VkPipelineShaderStageCreateInfo();
   stage_info->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -488,16 +512,18 @@ Result EngineVulkan::GetVkShaderStageInfo(
     for (size_t i = 0; i < info.shader_info_rt.size(); i++) {
       Result r = GetVkShaderStageInfo(info.shader_info_rt[i].type,
                                       info.shader_info_rt[i], &stage_info[i]);
-      if (!r.IsSuccess())
+      if (!r.IsSuccess()) {
         return r;
+      }
     }
   } else {
     uint32_t stage_count = 0;
     for (auto& it : info.shader_info) {
       Result r =
           GetVkShaderStageInfo(it.first, it.second, &stage_info[stage_count]);
-      if (!r.IsSuccess())
+      if (!r.IsSuccess()) {
         return r;
+      }
 
       if (it.first == kShaderTypeCompute &&
           it.second.required_subgroup_size > 0) {
@@ -530,8 +556,9 @@ Result EngineVulkan::GetVkShaderGroupInfo(
     auto& g = groups[i];
     ShaderGroup* sg = g.get();
 
-    if (sg == nullptr)
+    if (sg == nullptr) {
       return Result("Invalid shader group");
+    }
 
     VkRayTracingShaderGroupCreateInfoKHR group_info = {
         VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
@@ -547,8 +574,9 @@ Result EngineVulkan::GetVkShaderGroupInfo(
       group_info.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
       r = pipeline->GetShaderIndex(sg->GetGeneralShader(),
                                    &group_info.generalShader);
-      if (!r.IsSuccess())
+      if (!r.IsSuccess()) {
         return r;
+      }
     } else if (sg->IsHitGroup()) {
       group_info.type =
           sg->GetIntersectionShader() == nullptr
@@ -558,22 +586,25 @@ Result EngineVulkan::GetVkShaderGroupInfo(
       if (sg->GetClosestHitShader()) {
         r = pipeline->GetShaderIndex(sg->GetClosestHitShader(),
                                      &group_info.closestHitShader);
-        if (!r.IsSuccess())
+        if (!r.IsSuccess()) {
           return r;
+        }
       }
 
       if (sg->GetAnyHitShader()) {
         r = pipeline->GetShaderIndex(sg->GetAnyHitShader(),
                                      &group_info.anyHitShader);
-        if (!r.IsSuccess())
+        if (!r.IsSuccess()) {
           return r;
+        }
       }
 
       if (sg->GetIntersectionShader()) {
         r = pipeline->GetShaderIndex(sg->GetIntersectionShader(),
                                      &group_info.intersectionShader);
-        if (!r.IsSuccess())
+        if (!r.IsSuccess()) {
           return r;
+        }
       }
     } else {
       return Result("Uninitialized shader group");
@@ -587,8 +618,9 @@ Result EngineVulkan::GetVkShaderGroupInfo(
 
 Result EngineVulkan::DoClearColor(const ClearColorCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline->IsGraphics())
+  if (!info.vk_pipeline->IsGraphics()) {
     return Result("Vulkan::Clear Color Command for Non-Graphics Pipeline");
+  }
 
   return info.vk_pipeline->AsGraphics()->SetClearColor(
       command->GetR(), command->GetG(), command->GetB(), command->GetA());
@@ -596,32 +628,36 @@ Result EngineVulkan::DoClearColor(const ClearColorCommand* command) {
 
 Result EngineVulkan::DoClearStencil(const ClearStencilCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline->IsGraphics())
+  if (!info.vk_pipeline->IsGraphics()) {
     return Result("Vulkan::Clear Stencil Command for Non-Graphics Pipeline");
+  }
 
   return info.vk_pipeline->AsGraphics()->SetClearStencil(command->GetValue());
 }
 
 Result EngineVulkan::DoClearDepth(const ClearDepthCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline->IsGraphics())
+  if (!info.vk_pipeline->IsGraphics()) {
     return Result("Vulkan::Clear Depth Command for Non-Graphics Pipeline");
+  }
 
   return info.vk_pipeline->AsGraphics()->SetClearDepth(command->GetValue());
 }
 
 Result EngineVulkan::DoClear(const ClearCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline->IsGraphics())
+  if (!info.vk_pipeline->IsGraphics()) {
     return Result("Vulkan::Clear Command for Non-Graphics Pipeline");
+  }
 
   return info.vk_pipeline->AsGraphics()->Clear();
 }
 
 Result EngineVulkan::DoDrawRect(const DrawRectCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline->IsGraphics())
+  if (!info.vk_pipeline->IsGraphics()) {
     return Result("Vulkan::DrawRect for Non-Graphics Pipeline");
+  }
 
   auto* graphics = info.vk_pipeline->AsGraphics();
 
@@ -661,11 +697,11 @@ Result EngineVulkan::DoDrawRect(const DrawRectCommand* command) {
   auto type = parser.Parse("R32G32_SFLOAT");
   Format fmt(type.get());
 
-  auto buf = MakeUnique<Buffer>();
+  auto buf = std::make_unique<Buffer>();
   buf->SetFormat(&fmt);
   buf->SetData(std::move(values));
 
-  auto vertex_buffer = MakeUnique<VertexBuffer>(device_.get());
+  auto vertex_buffer = std::make_unique<VertexBuffer>(device_.get());
   vertex_buffer->SetData(0, buf.get(), InputRate::kVertex, buf->GetFormat(), 0,
                          buf->GetFormat()->SizeInBytes());
 
@@ -681,16 +717,18 @@ Result EngineVulkan::DoDrawRect(const DrawRectCommand* command) {
 
   Result r =
       graphics->Draw(&draw, vertex_buffer.get(), command->IsTimedExecution());
-  if (!r.IsSuccess())
+  if (!r.IsSuccess()) {
     return r;
+  }
 
   return {};
 }
 
 Result EngineVulkan::DoDrawGrid(const DrawGridCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline->IsGraphics())
+  if (!info.vk_pipeline->IsGraphics()) {
     return Result("Vulkan::DrawGrid for Non-Graphics Pipeline");
+  }
 
   auto* graphics = info.vk_pipeline->AsGraphics();
 
@@ -753,11 +791,11 @@ Result EngineVulkan::DoDrawGrid(const DrawGridCommand* command) {
   auto type = parser.Parse("R32G32_SFLOAT");
   Format fmt(type.get());
 
-  auto buf = MakeUnique<Buffer>();
+  auto buf = std::make_unique<Buffer>();
   buf->SetFormat(&fmt);
   buf->SetData(std::move(values));
 
-  auto vertex_buffer = MakeUnique<VertexBuffer>(device_.get());
+  auto vertex_buffer = std::make_unique<VertexBuffer>(device_.get());
   vertex_buffer->SetData(0, buf.get(), InputRate::kVertex, buf->GetFormat(), 0,
                          buf->GetFormat()->SizeInBytes());
 
@@ -772,16 +810,18 @@ Result EngineVulkan::DoDrawGrid(const DrawGridCommand* command) {
 
   Result r =
       graphics->Draw(&draw, vertex_buffer.get(), command->IsTimedExecution());
-  if (!r.IsSuccess())
+  if (!r.IsSuccess()) {
     return r;
+  }
 
   return {};
 }
 
 Result EngineVulkan::DoDrawArrays(const DrawArraysCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline)
+  if (!info.vk_pipeline) {
     return Result("Vulkan::DrawArrays for Non-Graphics Pipeline");
+  }
 
   return info.vk_pipeline->AsGraphics()->Draw(command, info.vertex_buffer.get(),
                                               command->IsTimedExecution());
@@ -789,8 +829,9 @@ Result EngineVulkan::DoDrawArrays(const DrawArraysCommand* command) {
 
 Result EngineVulkan::DoCompute(const ComputeCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline->IsCompute())
+  if (!info.vk_pipeline->IsCompute()) {
     return Result("Vulkan: Compute called for non-compute pipeline.");
+  }
 
   return info.vk_pipeline->AsCompute()->Compute(
       command->GetX(), command->GetY(), command->GetZ(),
@@ -810,8 +851,9 @@ Result EngineVulkan::InitDependendLibraries(amber::Pipeline* pipeline,
         if (!sub_pipeline->GetPipelineLibraries().empty()) {
           Result r = InitDependendLibraries(sub_pipeline, &sub_libs);
 
-          if (!r.IsSuccess())
+          if (!r.IsSuccess()) {
             return r;
+          }
         }
 
         if (vk_sub_pipeline->GetVkPipeline() == VK_NULL_HANDLE) {
@@ -833,16 +875,18 @@ Result EngineVulkan::InitDependendLibraries(amber::Pipeline* pipeline,
 
 Result EngineVulkan::DoTraceRays(const RayTracingCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline->IsRayTracing())
+  if (!info.vk_pipeline->IsRayTracing()) {
     return Result("Vulkan: RayTracing called for non-RayTracing pipeline.");
+  }
 
   amber::Pipeline* pipeline = command->GetPipeline();
   std::vector<VkPipeline> libs;
 
   if (!pipeline->GetPipelineLibraries().empty()) {
     Result r = InitDependendLibraries(pipeline, &libs);
-    if (!r.IsSuccess())
+    if (!r.IsSuccess()) {
       return r;
+    }
   }
 
   amber::SBT* rSBT = pipeline->GetSBT(command->GetRayGenSBTName());
@@ -860,13 +904,15 @@ Result EngineVulkan::DoTraceRays(const RayTracingCommand* command) {
 
 Result EngineVulkan::DoEntryPoint(const EntryPointCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline)
+  if (!info.vk_pipeline) {
     return Result("Vulkan::DoEntryPoint no Pipeline exists");
+  }
 
   VkShaderStageFlagBits stage = VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
   Result r = ToVkShaderStage(command->GetShaderType(), &stage);
-  if (!r.IsSuccess())
+  if (!r.IsSuccess()) {
     return r;
+  }
 
   info.vk_pipeline->SetEntryPointName(stage, command->GetEntryPointName());
   return {};
@@ -875,8 +921,9 @@ Result EngineVulkan::DoEntryPoint(const EntryPointCommand* command) {
 Result EngineVulkan::DoPatchParameterVertices(
     const PatchParameterVerticesCommand* command) {
   auto& info = pipeline_map_[command->GetPipeline()];
-  if (!info.vk_pipeline->IsGraphics())
+  if (!info.vk_pipeline->IsGraphics()) {
     return Result("Vulkan::DoPatchParameterVertices for Non-Graphics Pipeline");
+  }
 
   info.vk_pipeline->AsGraphics()->SetPatchControlPoints(
       command->GetControlPointCount());
